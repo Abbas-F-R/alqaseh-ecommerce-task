@@ -24,8 +24,9 @@ public static class LoggingDecoratorExtensions
     /// </summary>
     public static IServiceCollection AddServiceLoggingDecorators(this IServiceCollection services)
     {
-        services.DecorateWithLogging<Features.Auth.Services.IAuthService>();
         services.DecorateWithLogging<Features.Products.Services.IProductService>();
+        services.DecorateWithLogging<Features.Orders.Services.IOrderService>();
+        services.DecorateWithLogging<Features.Auth.Services.IAuthService>();
         return services;
     }
 }

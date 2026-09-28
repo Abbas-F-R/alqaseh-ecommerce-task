@@ -1,3 +1,5 @@
+using AlQaseh_Ecommerce_API.Features.Orders.Dtos;
+using AlQaseh_Ecommerce_API.Features.Orders.Validators;
 using AlQaseh_Ecommerce_API.Features.Products;
 using AlQaseh_Ecommerce_API.Features.Products.Dtos;
 using AlQaseh_Ecommerce_API.Features.Products.Validators;
@@ -113,4 +115,16 @@ public class ProductRulesTests
     [InlineData(1, 50, true)]
     public void CustomerOrderPaging_HasTheSameLimits(int page, int size, bool valid) =>
         new BaseFilterValidator().Validate(new BaseFilter { PageNumber = page, PageSize = size }).IsValid.Should().Be(valid);
+
+    [Theory]
+    [InlineData("CreditCard", true)]
+    [InlineData("xyzwallet", true)]
+    [InlineData(null, true)]
+    [InlineData("Bitcoin", false)]
+    public void OrderFilter_PaymentMethodMustBeSupported(string? method, bool valid) =>
+        new OrderFilterValidator().Validate(new OrderFilter { PaymentMethod = method }).IsValid.Should().Be(valid);
+
+    [Fact]
+    public void OrderFilter_CustomerIdMustBePositive() =>
+        new OrderFilterValidator().Validate(new OrderFilter { CustomerId = 0 }).IsValid.Should().BeFalse();
 }
