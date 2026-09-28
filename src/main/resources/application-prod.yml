@@ -1,0 +1,27 @@
+# Production. Every value comes from the environment and none has a default: a missing
+# variable stops the application at startup instead of running with an insecure fallback.
+#
+#   SPRING_PROFILES_ACTIVE=prod
+#   SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD
+#   JWT_SECRET        Base64-encoded key, at least 256 bits (e.g. `openssl rand -base64 32`)
+#   JWT_EXPIRATION_MS optional, default 1 hour
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+
+application:
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET}
+      expiration-ms: ${JWT_EXPIRATION_MS:3600000}
+  error:
+    include-debug-details: false
+
+# API documentation is not exposed publicly.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

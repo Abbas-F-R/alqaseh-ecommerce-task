@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: alqaseh-ecommerce-api-test
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop   # H2 tests build the schema from the entities; Flyway is exercised by the PostgreSQL test
+    properties:
+      hibernate:
+        generate_statistics: true
+  flyway:
+    enabled: false
+
+application:
+  security:
+    jwt:
+      secret-key: ${random.value}${random.value}   # random per test run: no key material in the repository
+      expiration-ms: 3600000
+
+logging:
+  level:
+    root: WARN
+    com.alqaseh.ecommerce: WARN

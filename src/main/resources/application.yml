@@ -1,0 +1,58 @@
+# Settings shared by every environment. Environment-specific values (database, secrets, seed data,
+# debug output) live in application-{dev,prod}.yml. Nothing secret belongs in this file.
+spring:
+  application:
+    name: alqaseh-ecommerce-api
+  profiles:
+    # Convenience for local runs. Production must set SPRING_PROFILES_ACTIVE=prod.
+    default: dev
+  jackson:
+    mapper:
+      # Requests may send "furniture", "Furniture" or "FURNITURE"; responses always use the upper-case constant.
+      accept-case-insensitive-enums: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate            # the schema is owned by Flyway; Hibernate only checks the mapping
+    properties:
+      hibernate:
+        # Lazy collections/proxies of a whole page are loaded together (1 query per association per page)
+        # instead of one query per parent row. 50 = maximum page size.
+        default_batch_fetch_size: 50
+        # Batch INSERT/UPDATE statements (order lines, stock updates of one order).
+        jdbc:
+          batch_size: 25
+        order_inserts: true
+        order_updates: true
+  flyway:
+    locations: classpath:db/migration
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 1024
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+
+application:
+  error:
+    # 500 responses add the exception class/message under "debug". Development only.
+    include-debug-details: false
+
+springdoc:
+  swagger-ui:
+    operationsSorter: method
+    tagsSorter: alpha
+
+logging:
+  level:
+    root: INFO
