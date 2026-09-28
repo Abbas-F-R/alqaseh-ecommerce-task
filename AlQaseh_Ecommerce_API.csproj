@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <!-- Missing XML comments are not an error: only the controllers and DTOs feed the API documentation. -->
+        <NoWarn>$(NoWarn);1591</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Remove="tests\**" />
+        <Content Remove="tests\**" />
+        <EmbeddedResource Remove="tests\**" />
+        <None Remove="tests\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Versioned SQL migrations, applied at startup by DatabaseMigrator. -->
+        <EmbeddedResource Include="Database\Migrations\*.sql" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+        <PackageReference Include="Dapper" Version="2.1.72" />
+        <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
+        <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.0" />
+        <!-- Newer than the version Swashbuckle brings in (fixes GHSA-v5pm-xwqc-g5wc). -->
+        <PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />
+        <PackageReference Include="Scrutor" Version="7.0.0" />
+        <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+        <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
+        <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+        <PackageReference Include="Sqids" Version="3.2.1" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+    </ItemGroup>
+
+</Project>
