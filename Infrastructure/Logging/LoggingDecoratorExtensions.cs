@@ -25,6 +25,7 @@ public static class LoggingDecoratorExtensions
     public static IServiceCollection AddServiceLoggingDecorators(this IServiceCollection services)
     {
         services.DecorateWithLogging<Features.Auth.Services.IAuthService>();
+        services.DecorateWithLogging<Features.Products.Services.IProductService>();
         return services;
     }
 }
