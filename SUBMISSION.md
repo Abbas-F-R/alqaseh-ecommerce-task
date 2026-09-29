@@ -66,6 +66,8 @@ Demo products (9, several categories and stock levels, one out of stock) and dis
 | `WELCOME10` | 10 | 50 | valid (single use) |
 | `EXPIRED50` | 50 | 100 | expired |
 | `USED25` | 25 | 60 | already used |
+| `ABC123` | 5,000 | 25,000 | valid (single use); the assignment's example code |
+| `ZYX123` | 10,000 | 50,000 | valid (single use); the assignment's example code |
 
 Fake payments: a credit card with number `0000000000000000` is declined and an XYZ wallet with password `wrongPassword` is rejected; anything else succeeds.
 These users and the demo data exist only in the default `dev` profile; the `prod` profile creates none of them (see section 9).
@@ -90,7 +92,7 @@ In addition the running application was tested from the outside through HTTP onl
 | Product: name, category, price, cost, quantity; fixed categories; unique name | `ProductRequest`, enum `ProductCategory` (`furniture, electronics, beauty, garden`), unique index on `LOWER(name)` |
 | Who created/last updated a product and when | `createdBy/At`, `updatedBy/At` (Spring Data JPA auditing), returned to admins |
 | Create / update product: admin only | `POST /api/products`, `PUT /api/products/{id}` |
-| List products, filter by name and category, large catalogue | `GET /api/products?name=&category=&page=&size=` — filtering and pagination in PostgreSQL, 2 SQL statements per request |
+| List products, filter by name and category, large catalogue | `GET /api/admin/products?name=&category=&page=&size=` (page/offset, totals, exact quantity) and `GET /api/customer/products?name=&category=&limit=&cursor=` (keyset/cursor, stock status): filtering and pagination in PostgreSQL; the cursor is an opaque token over the primary key, served by `idx_products_category_id` |
 | Admin sees exact quantity; customer sees `low` / `limited` / `available` | admin rows: `availableQuantity`; customer rows: `stockStatus` (0–4 `low`, 5–9 `limited`, 10+ `available`) |
 | Place an order (customer only), one or more products with quantities | `POST /api/orders`; stock is checked and deducted atomically |
 | Payment: CreditCard or XyzWallet (phone + wallet password), fake providers | `PaymentProcessor` strategy: `CreditCard`, `XyzWallet` |
@@ -169,7 +171,7 @@ curl -s -X POST http://localhost:8080/api/products -H "Authorization: Bearer $AD
   -d '{"name":"Smart Ultra Watch","category":"electronics","price":250.00,"cost":140.00,"availableQuantity":20}'
 
 # list products as a customer (stockStatus only), filtered and paginated
-curl -s "http://localhost:8080/api/products?category=electronics&name=watch&page=0&size=10" -H "Authorization: Bearer $CUSTOMER_TOKEN"
+curl -s "http://localhost:8080/api/customer/products?category=electronics&name=watch&limit=10" -H "Authorization: Bearer $CUSTOMER_TOKEN"
 
 # place an order with a discount code (customer)
 curl -s -X POST http://localhost:8080/api/orders -H "Authorization: Bearer $CUSTOMER_TOKEN" -H "Content-Type: application/json" \
@@ -183,5 +185,11 @@ curl -s -X POST http://localhost:8080/api/orders -H "Authorization: Bearer $CUST
 
 # my orders (customer) / all orders with profit, filtered (admin)
 curl -s "http://localhost:8080/api/orders/my" -H "Authorization: Bearer $CUSTOMER_TOKEN"
-curl -s "http://localhost:8080/api/orders?paymentMethod=credit_card&customer=customer1" -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -s "http://localhost:8080/api/orders?paymentMethod=CreditCard&customer=customer1" -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
+
+
+**Product lists (two endpoints, two pagination styles, on purpose):** `GET /api/admin/products` uses page/offset pagination (`page` from 0, `size` 1–50) and answers
+`{ "data": [...], "pagesCount", "currentPage", "totalCount", "isLast" }` because an admin dashboard needs totals and page jumping; `GET /api/customer/products` uses
+cursor (keyset) pagination (`limit` 1–50, `cursor`) and answers `{ "data": [...], "nextCursor", "hasMore" }` because customers browse a large catalogue page after page
+(constant cost per page, no duplicates or gaps while products change). Orders keep page/offset pagination.

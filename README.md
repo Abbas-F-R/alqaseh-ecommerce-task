@@ -30,7 +30,8 @@ Prefer running from source? `docker compose up -d postgres` then `./mvnw spring-
 | Endpoint | Who | Purpose |
 | --- | --- | --- |
 | `POST /api/auth/login` | public | returns a Bearer JWT |
-| `GET /api/products` | admin, customer | filter `name`, `category`; `page`, `size` (1–50, default 10). Admin rows show cost and exact quantity, customer rows `stockStatus` |
+| `GET /api/admin/products` | admin | filter `name`, `category`; page/offset pagination (`page` from 0, `size` 1–50) with totals; rows show cost and exact quantity |
+| `GET /api/customer/products` | customer | filter `name`, `category`; cursor pagination (`limit` 1–50, `cursor`); rows show `stockStatus` only |
 | `POST /api/products`, `PUT /api/products/{id}` | admin | create / replace a product |
 | `POST /api/orders` | customer | place an order (items, optional `discountCode`, `payment`) |
 | `GET /api/orders/my` | customer | own orders |

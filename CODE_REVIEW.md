@@ -105,7 +105,8 @@ Read endpoints are measured with Hibernate statistics (`QueryCountIntegrationTes
 
 | Endpoint | Statements | Notes |
 | --- | --- | --- |
-| `GET /api/products` | 2 (page + count) | only the page's rows are hydrated |
+| `GET /api/admin/products` | 2 (page + count) | only the page's rows are hydrated |
+| `GET /api/customer/products` | 1 (limit + 1 rows, no count) | keyset pagination |
 | `GET /api/orders/my` | 3 (page + count + all items of the page) | no product loaded |
 | `GET /api/orders` (admin) | 3 | customer joined into the page query |
 | `POST /api/orders` | 1 (products) + 1 (discount, if used) + batched UPDATEs/INSERTs | no `SELECT` per line, no `SELECT` for the user (`getReferenceById`) |
@@ -216,7 +217,7 @@ and exercised through HTTP only (300 checks), `prod` profile boot checks, and an
    but makes tokens valid until expiry.
 5. **Validation messages are English only** (business errors are localized EN/AR). Localizing Bean Validation messages needs message keys in the annotations.
 6. **`name LIKE '%x%'`** cannot use a b-tree. Fine for a catalogue of this size; add `pg_trgm` + GIN if it grows.
-7. **Role-dependent `GET /api/products` returns `PageResponse<?>`** (admin vs customer row type). Two endpoints or a sealed row type would be stricter; kept one endpoint per the spec.
+7. **Product lists are split by role** (`/api/admin/products` with page/offset pagination, `/api/customer/products` with cursor pagination), so every endpoint has one typed response.
 8. **`BaseController` uses one `@Autowired` field and `HttpServletRequest` parameters** to build the error `path`. Pragmatic; a `ResponseBodyAdvice`/exception-free alternative would add more code than it removes.
 9. **`Order.status` has a single value (`COMPLETED`)**: keep the column for a future cancellation feature, or drop it.
 10. **CI needs a PostgreSQL** for `PostgresSchemaIntegrationTest`: a Docker daemon (Testcontainers 1.21.4, which works with Docker Engine 29) or a service container passed with `-Dtest.postgres.url`. Without either the class is skipped and the PostgreSQL-only guarantees go untested.
