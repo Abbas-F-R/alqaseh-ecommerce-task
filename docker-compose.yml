@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: alqaseh-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: alqaseh_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev_only_fake_password
+    ports:
+      - "${DB_PORT:-5432}:5432"   # set DB_PORT=5433 if a local PostgreSQL already uses 5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d alqaseh_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # The API itself (dev profile: demo data, random JWT key). Skip it with:  docker compose up -d postgres
+  api:
+    build: .
+    container_name: alqaseh-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/alqaseh_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: dev_only_fake_password
+    ports:
+      - "${API_PORT:-8080}:8080"   # set API_PORT=9090 if 8080 is taken
+
+volumes:
+  pgdata:
