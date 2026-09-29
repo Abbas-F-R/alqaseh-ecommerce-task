@@ -515,6 +515,24 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
             "GET /api/orders/my", "POST /api/auth/login", "POST /api/orders", "POST /api/products", "PUT /api/products/{id}");
     }
 
+    [SqlServerFact]
+    public async Task Swagger_EveryEndpointExceptLogin_CarriesTheBearerRequirement()
+    {
+        foreach (var document in new[] { "1-admin", "2-customer", "v1" })
+        {
+            var doc = await api.GetAsync($"/swagger/{document}/swagger.json");
+            doc.Status.Should().Be(200);
+
+            foreach (var path in doc.Json.GetProperty("paths").EnumerateObject())
+                foreach (var operation in path.Value.EnumerateObject())
+                {
+                    var hasBearer = operation.Value.TryGetProperty("security", out var security)
+                                    && security.EnumerateArray().Any(requirement => requirement.TryGetProperty("Bearer", out _));
+                    hasBearer.Should().Be(path.Name != "/api/auth/login", $"{document}: {operation.Name.ToUpperInvariant()} {path.Name}");
+                }
+        }
+    }
+
     // ------------------------------------------------------------------ audit trail (database triggers)
 
     [SqlServerFact]

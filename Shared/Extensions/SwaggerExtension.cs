@@ -96,7 +96,9 @@ public class AuthorizeOperationFilter : IOperationFilter
         operation.Security ??= [];
         operation.Security.Add(new OpenApiSecurityRequirement
         {
-            [new OpenApiSecuritySchemeReference("Bearer")] = []
+            // The reference needs its document, otherwise it is written as an empty requirement `{}` and Swagger UI shows no lock
+            // and does not send the token of the Authorize button.
+            [new OpenApiSecuritySchemeReference("Bearer", context.Document)] = []
         });
     }
 }
