@@ -39,13 +39,13 @@ Starts PostgreSQL 17 (`postgres:17-alpine`) with database `alqaseh_db`, user `po
 ```
 
 API at <http://localhost:8080> (`SERVER_PORT=9090 ./mvnw spring-boot:run` for another port; `DB_PORT` as in step 2).
-On start Flyway applies the migrations (`V1` schema, `V2` demo products and discount codes, `V3` hardening) and the dev seeder creates the demo users.
+On start Flyway applies the migrations (`V1` schema, `V3` hardening, `V4` integrity constraints, `V5` keyset index, `V7` order money columns, `V8` redundant index; in the `dev` profile also the demo data `V2` and `V6`) and the dev seeder creates the demo users.
 Stop with Ctrl+C; `docker compose down` stops the database.
 
 ## 4. API documentation (Swagger / OpenAPI)
 
-* Swagger UI: <http://localhost:8080/swagger-ui/index.html>
-* OpenAPI JSON: <http://localhost:8080/v3/api-docs>
+* Swagger UI: <http://localhost:8080/swagger-ui/index.html>: pick **Admin** or **Customer** in the definition dropdown; each lists only the endpoints of that role (`POST /api/auth/login` is in both)
+* OpenAPI JSON per role: <http://localhost:8080/v3/api-docs/1-admin> · <http://localhost:8080/v3/api-docs/2-customer>
 
 Every endpoint lists all its real responses (success, validation error, business errors, 401/403, 404/409, 500) with example bodies, the request
 body examples, the query parameters with defaults and limits, and the required role. To try secured endpoints: call `POST /api/auth/login`, copy
@@ -99,7 +99,7 @@ In addition the running application was tested from the outside through HTTP onl
 | One discount code per order: fixed amount, minimum order total, expiry, single use | `DiscountServiceImpl.redeem`, `discountCode` field of the order |
 | Admin: list all orders with profit, filter by customer and payment method | `GET /api/orders?customer=&customerId=&paymentMethod=` |
 | Customer: own orders with total price, payment method, date, discount amount | `GET /api/orders/my` |
-| Bonus: tests, migrations, API documentation | 150+ tests, Flyway `V1–V3`, Swagger UI |
+| Bonus: tests, migrations, API documentation | 177 tests (unit, H2, real PostgreSQL), Flyway `V1–V8`, Swagger UI with one document per role |
 
 ## 8. Assumptions
 
@@ -117,7 +117,7 @@ In addition the running application was tested from the outside through HTTP onl
    wallet password, card payments need a card number; missing fields are a 400.
 8. **Who created/updated** a product is stored as user id plus timestamp and returned to admins only; customers never see cost, exact quantity or audit fields.
 9. **Lists:** default page size 10, maximum 50, server-side sort (products oldest first, orders newest first). All filters are optional and combinable. The customer filter of the admin
-   order list matches the username (case-insensitive part) or the exact `customerId`. A page without matches is a normal `200` with empty `content`.
+   order list matches the username (case-insensitive part) or the exact `customerId`. A page without matches is a normal `200` with an empty `data`.
 10. **Roles:** customers see only their own orders; admins cannot place orders; only admins list all orders.
 11. **Currency** is not modelled; amounts are decimals with two digits (e.g. IQD).
 12. **Users, products and discount codes are seeded** (users by a startup seeder, products and codes by a Flyway script), as allowed by the assignment. No registration or admin endpoints for them.
@@ -137,7 +137,8 @@ In addition the running application was tested from the outside through HTTP onl
 * **Concurrency:** optimistic locking (`@Version`) on products and discount codes; a unique index on `LOWER(name)` is the final guard for product names, and its violation is answered with 409.
 * **Performance:** filtering and pagination in the database; no N+1 (batch loading of order lines, one query for all products of an order, join fetch of the customer for the admin list);
   indexes chosen from the actual queries (`orders(customer_id, created_at)`, `orders(payment_method, created_at)`, `products(category, id)`, unique indexes). Statement counts are asserted in tests.
-* **Money** is `BigDecimal` / `NUMERIC(12,2)`. Primary keys are UUID v7 (time ordered, index friendly). Audit fields come from Spring Data JPA auditing; a small `audit_logs` table records
+* **Partitioning: not needed.** Measured with 200,000 products and 300,000 orders, the whole database is about 145 MB and every list query is answered from an index in under a millisecond; only the totals of the admin lists (`count(*)`, 10-20 ms) and the `LIKE '%text%'` name search scan the table. Partitioning would add complexity (partition keys in every unique index, no cross-partition unique name) without a measurable gain; orders by month would be the first candidate at hundreds of millions of rows.
+* **Money** is `BigDecimal` / `NUMERIC(12,2)` for prices, costs and discount codes and `NUMERIC(18,2)` for order amounts (an order can hold 1,000,000 units). Primary keys are UUID v7 (time ordered, index friendly). Audit fields come from Spring Data JPA auditing; a small `audit_logs` table records
   business events (product created/updated, order created, discount applied) and is not exposed by the API.
 * **Configuration:** profiles `dev` (default; demo data and users, local defaults, random JWT key per start), `prod` (everything from environment variables, no defaults, no demo data, Swagger off) and `test`.
   Production needs `SPRING_PROFILES_ACTIVE=prod`, `SPRING_DATASOURCE_URL/USERNAME/PASSWORD` and `JWT_SECRET` (Base64, at least 256 bit); the application refuses to start without them.
