@@ -6,6 +6,10 @@ spring:
   profiles:
     # Convenience for local runs. Production must set SPRING_PROFILES_ACTIVE=prod.
     default: dev
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/alqaseh_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:your_password_here}
   jackson:
     mapper:
       # Requests may send "furniture", "Furniture" or "FURNITURE"; responses always use the upper-case constant.

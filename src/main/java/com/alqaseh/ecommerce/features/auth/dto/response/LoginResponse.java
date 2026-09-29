@@ -18,10 +18,6 @@ public class LoginResponse {
     @Schema(description = "JWT Bearer access token")
     private String token;
 
-    @Builder.Default
-    @Schema(description = "Token type", example = "Bearer")
-    private String type = "Bearer";
-
     @Schema(description = "Username of authenticated user", example = "admin")
     private String username;
 

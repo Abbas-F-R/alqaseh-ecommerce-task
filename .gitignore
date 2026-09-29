@@ -30,3 +30,9 @@ target/
 logs/
 *.log
 .env
+
+### Environment configuration files ###
+**/application-dev.yml
+**/application-prod.yml
+application-dev.yml
+application-prod.yml

@@ -71,7 +71,6 @@ class AuthenticationIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.role", is("CUSTOMER")))
                 .andExpect(jsonPath("$.data.username", is("customer1")))
-                .andExpect(jsonPath("$.data.type", is("Bearer")))
                 .andExpect(content().string(not(containsString("$2a$"))));
     }
 
