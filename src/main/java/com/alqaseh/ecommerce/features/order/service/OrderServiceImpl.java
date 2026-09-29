@@ -34,6 +34,7 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,8 +67,8 @@ public class OrderServiceImpl implements OrderService {
      * <ol>
      *   <li>load products (1 query) and validate existence + stock: nothing modified yet;</li>
      *   <li>calculate subtotal, validate the discount, calculate the final total: nothing modified yet;</li>
-     *   <li>reserve stock and redeem the discount, then flush: a concurrent order on the same product/code
-     *       fails here (409) <em>before</em> the customer is charged;</li>
+     *   <li>reserve stock (guarded UPDATE: not enough left means INSUFFICIENT_STOCK) and redeem the discount, then flush: a concurrent
+     *       order on the same code fails here (409) <em>before</em> the customer is charged;</li>
      *   <li>process payment: a decline rolls the reservation back;</li>
      *   <li>create order + items and the audit rows; commit.</li>
      * </ol>
@@ -125,8 +126,15 @@ public class OrderServiceImpl implements OrderService {
         }
         BigDecimal total = subtotal.subtract(discountAmount);
 
-        // 4. Reserve stock and flush so version conflicts surface now, before any money moves.
-        items.forEach(item -> item.getProduct().deductStock(item.getQuantity()));
+        // 4. Take the stock with one guarded UPDATE per product, in product-id order (one fixed order cannot deadlock), and flush so a lost
+        //    discount-code race surfaces now, before any money moves. 0 rows updated: another order took the stock in the meantime.
+        List<OrderItem> byProduct = items.stream().sorted(Comparator.comparing(item -> item.getProduct().getId())).toList();
+        for (OrderItem item : byProduct) {
+            if (productRepository.reserveStock(item.getProduct().getId(), item.getQuantity()) == 0) {
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                return Result.failure(ErrorCode.INSUFFICIENT_STOCK, item.getProductName());
+            }
+        }
         productRepository.flush();
 
         // 5. Charge. A decline is a business outcome: undo the reservation and report it.

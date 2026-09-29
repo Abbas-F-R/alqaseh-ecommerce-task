@@ -50,10 +50,6 @@ public class Product extends BaseEntity {
     @Column(name = "version", nullable = false)
     private Long version;
 
-    public void deductStock(int quantity) {
-        this.availableQuantity -= quantity;
-    }
-
     public boolean hasSufficientStock(int quantity) {
         return this.availableQuantity >= quantity;
     }

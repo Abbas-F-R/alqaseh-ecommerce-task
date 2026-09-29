@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -32,6 +33,7 @@ public class ProductRequest {
 
     @NotBlank(message = "Product name is required")
     @Size(max = 150, message = "Product name must not exceed 150 characters")
+    @Pattern(regexp = "\\P{Cc}*", message = "Product name must not contain control characters")
     @Schema(description = "Unique product name", example = "Standing Desk")
     private String name;
 
@@ -61,6 +63,18 @@ public class ProductRequest {
     @AssertTrue(message = "Cost must not exceed the price")
     private boolean isCostNotAbovePrice() {
         return price == null || cost == null || cost.compareTo(price) <= 0;
+    }
+
+    public void setPrice(BigDecimal price) {
+        this.price = withCents(price);
+    }
+
+    public void setCost(BigDecimal cost) {
+        this.cost = withCents(cost);
+    }
+
+    private static BigDecimal withCents(BigDecimal amount) {
+        return amount != null && amount.scale() < 2 ? amount.setScale(2) : amount;
     }
 
     /** Names are compared and stored trimmed, so whitespace can never create a "different" duplicate. */

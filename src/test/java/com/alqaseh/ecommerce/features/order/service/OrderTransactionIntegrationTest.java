@@ -124,6 +124,26 @@ class OrderTransactionIntegrationTest {
     }
 
     @Test
+    @DisplayName("A customer's order takes stock without changing who edited the product last, or when")
+    void orderDoesNotChangeTheProductAudit() {
+        User admin = userRepository.findByUsername("admin").orElseThrow();
+        authenticate(admin);
+        Product desk = saveProduct("Audited desk", 100, 60, 10); // created (and last updated) by the admin
+        authenticate(customer);
+        Product before = productRepository.findById(desk.getId()).orElseThrow();
+
+        Result<CustomerOrderResponse> result = orderService.createOrder(order(GOOD_CARD, null, new OrderItemRequest(desk.getId(), 3)));
+
+        assertThat(result.isSuccess()).isTrue();
+        Product after = productRepository.findById(desk.getId()).orElseThrow();
+        assertThat(after.getAvailableQuantity()).isEqualTo(7);
+        assertThat(before.getUpdatedBy()).isEqualTo(admin.getId());
+        assertThat(after.getUpdatedBy()).isEqualTo(admin.getId());
+        assertThat(after.getUpdatedAt()).isEqualTo(before.getUpdatedAt());
+        assertThat(after.getVersion()).isEqualTo(before.getVersion() + 1);
+    }
+
+    @Test
     @DisplayName("The largest order the API accepts (1,000,000 units at the largest price) fits the money columns")
     void largestAcceptedOrderIsStored() {
         Product big = productRepository.save(Product.builder().name("Big").category(ProductCategory.ELECTRONICS)

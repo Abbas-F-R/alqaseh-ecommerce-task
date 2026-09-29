@@ -1,6 +1,7 @@
 package com.alqaseh.ecommerce.features.order.dto.request;
 
 import com.alqaseh.ecommerce.features.payment.entity.PaymentMethod;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import com.alqaseh.ecommerce.shared.dto.PaginationRequest;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -22,6 +23,7 @@ public class OrderFilterRequest extends PaginationRequest {
 
     @Schema(description = "Username contains")
     @Size(max = 50, message = "Customer filter cannot exceed 50 characters")
+    @Pattern(regexp = "\\P{Cc}*", message = "Customer filter must not contain control characters")
     private String customer;
 
     @Schema(description = "Customer id")

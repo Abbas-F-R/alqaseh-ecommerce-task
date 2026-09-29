@@ -47,8 +47,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -98,6 +100,7 @@ class CreateOrderServiceTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
 
+        lenient().when(productRepository.reserveStock(any(), anyInt())).thenReturn(1);
         keyboard = product(PRODUCT_ID_1, "Keyboard", 50, 30, 10);
         mouse = product(PRODUCT_ID_2, "Mouse", 25, 15, 10);
     }
@@ -161,8 +164,8 @@ class CreateOrderServiceTest {
         assertThat(response.getDiscountAmount()).isEqualByComparingTo("10");
         assertThat(response.getItems()).hasSize(2);
 
-        assertThat(keyboard.getAvailableQuantity()).isEqualTo(8);
-        assertThat(mouse.getAvailableQuantity()).isEqualTo(9);
+        verify(productRepository).reserveStock(PRODUCT_ID_1, 2); // stock is taken by guarded updates, not by changing the entities
+        verify(productRepository).reserveStock(PRODUCT_ID_2, 1);
 
         ArgumentCaptor<Order> saved = ArgumentCaptor.forClass(Order.class);
         verify(orderRepository).save(saved.capture());
@@ -188,7 +191,7 @@ class CreateOrderServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getValue().getItems()).hasSize(1);
         assertThat(result.getValue().getItems().get(0).getQuantity()).isEqualTo(5);
-        assertThat(keyboard.getAvailableQuantity()).isEqualTo(5);
+        verify(productRepository).reserveStock(PRODUCT_ID_1, 5); // one guarded update for the merged quantity
         verify(productRepository, times(1)).findAllById(Set.of(PRODUCT_ID_1));
     }
 

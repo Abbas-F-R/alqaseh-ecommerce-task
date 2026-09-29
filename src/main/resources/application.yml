@@ -11,7 +11,10 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:your_password_here}
   jackson:
+    deserialization:
+      accept-float-as-int: false   # quantity 1.5 is a 400, not a silent 1
     mapper:
+      allow-coercion-of-scalars: false   # "5" is not a number
       # Requests may send "furniture", "Furniture" or "FURNITURE"; responses always use the upper-case constant.
       accept-case-insensitive-enums: true
   jpa:

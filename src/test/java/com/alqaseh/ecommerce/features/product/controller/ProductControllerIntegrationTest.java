@@ -159,7 +159,7 @@ class ProductControllerIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "customer1", roles = {"CUSTOMER"})
+    @WithMockUser(username = "admin", roles = {"ADMIN"})
     @DisplayName("Arabic localization via Accept-Language header")
     void arabicLocalizationSupport() throws Exception {
         ProductRequest invalidRequest = ProductRequest.builder().build();
@@ -185,7 +185,7 @@ class ProductControllerIntegrationTest {
         String body = mockMvc.perform(put("/api/products/" + product.getId()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Audit Lamp\",\"category\":\"garden\",\"price\":12,\"cost\":5,\"availableQuantity\":3}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.price", is(12)))
+                .andExpect(jsonPath("$.data.price", is(12.0)))
                 .andReturn().getResponse().getContentAsString();
 
         JsonNode data = objectMapper.readTree(body).get("data");

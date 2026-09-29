@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,9 +27,10 @@ public class CreateOrderRequest {
     @Size(max = 100, message = "Order cannot contain more than 100 items")
     @Valid
     @Schema(description = "List of products and quantities")
-    private List<OrderItemRequest> items;
+    private List<@NotNull(message = "An order line cannot be null") @Valid OrderItemRequest> items;
 
     @Size(max = 50, message = "Discount code must not exceed 50 characters")
+    @Pattern(regexp = "\\P{Cc}*", message = "Discount code must not contain control characters")
     @Schema(description = "Optional promotional discount code", example = "WELCOME10")
     private String discountCode;
 
