@@ -29,7 +29,7 @@ services:
   # Skip it with:  docker compose up -d sqlserver
   api:
     build: .
-    container_name: alqaseh-api
+    container_name: alqaseh-dotnet-api
     depends_on:
       sqlserver:
         condition: service_healthy

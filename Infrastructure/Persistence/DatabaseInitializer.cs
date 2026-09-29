@@ -1,7 +1,7 @@
 namespace AlQaseh_Ecommerce_API.Infrastructure.Persistence;
 
 /// <summary>
-/// Startup database work: apply the migrations (<c>Database:AutoMigrate</c>, default true), then load the demo data (<c>Seed:Enabled</c>, default false).
+/// Startup database work: apply the migrations (<c>Database:AutoMigrate</c>, default true), then load the demo data (<c>Seed:Enabled</c>, on by default in Development only).
 /// A failure stops the application at startup with the reason in the log instead of leaving it running without a database.
 /// </summary>
 public static class DatabaseInitializer
@@ -18,7 +18,7 @@ public static class DatabaseInitializer
                     scope.ServiceProvider.GetRequiredService<DapperContext>(),
                     scope.ServiceProvider.GetRequiredService<ILogger<DatabaseMigrator>>()).MigrateAsync();
 
-            if (app.Configuration.GetValue("Seed:Enabled", false))
+            if (app.Configuration.GetValue("Seed:Enabled", app.Environment.IsDevelopment()))
                 await new DatabaseSeeder(
                     scope.ServiceProvider.GetRequiredService<DapperContext>(),
                     scope.ServiceProvider.GetRequiredService<TimeProvider>(),
