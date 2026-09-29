@@ -33,12 +33,13 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
     [SqlServerFact]
     public async Task EveryEndpointExceptLoginRequiresAToken()
     {
-        (await api.GetAsync("/api/products")).Status.Should().Be(401);
+        (await api.GetAsync("/api/admin/products")).Status.Should().Be(401);
+        (await api.GetAsync("/api/customer/products")).Status.Should().Be(401);
         (await api.GetAsync("/api/orders")).Status.Should().Be(401);
         (await api.GetAsync("/api/orders/my")).Status.Should().Be(401);
         (await api.PostAsync("/api/orders", null, new { })).Status.Should().Be(401);
         (await api.PostAsync("/api/products", null, new { })).Status.Should().Be(401);
-        (await api.GetAsync("/api/products", "garbage.token.value")).Status.Should().Be(401);
+        (await api.GetAsync("/api/customer/products", "garbage.token.value")).Status.Should().Be(401);
     }
 
     [SqlServerFact]
@@ -51,6 +52,8 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
         (await api.PostAsync("/api/products", customer, product)).Status.Should().Be(403);
         (await api.PutAsync("/api/products/abc", customer, product)).Status.Should().Be(403);
         (await api.GetAsync("/api/orders", customer)).Status.Should().Be(403);
+        (await api.GetAsync("/api/admin/products", customer)).Status.Should().Be(403);
+        (await api.GetAsync("/api/customer/products", admin)).Status.Should().Be(403);
         (await api.GetAsync("/api/orders/my", admin)).Status.Should().Be(403);
         (await api.PostAsync("/api/orders", admin, new { })).Status.Should().Be(403);
     }
@@ -143,8 +146,8 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
         foreach (var quantity in new[] { 0, 4, 5, 9, 10, 300 })
             await api.NewProductAsync(quantity, category: "beauty", name: $"{prefix}-{quantity}");
 
-        var customerPage = await api.GetAsync($"/api/products?name={prefix}&pageSize=50", await api.Customer1Token());
-        var adminPage = await api.GetAsync($"/api/products?name={prefix}&pageSize=50", await api.AdminToken());
+        var customerPage = await api.GetAsync($"/api/customer/products?name={prefix}&limit=50", await api.Customer1Token());
+        var adminPage = await api.GetAsync($"/api/admin/products?name={prefix}&pageSize=50", await api.AdminToken());
 
         var statuses = customerPage.Json.GetProperty("data").EnumerateArray()
             .ToDictionary(p => p.GetProperty("name").GetString()!, p => p.GetProperty("stockStatus").GetString());
@@ -171,23 +174,41 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
             await api.NewProductAsync(category: i <= 3 ? "garden" : "electronics", name: $"{prefix} item {i}");
         var customer = await api.Customer1Token();
 
-        var all = await api.GetAsync($"/api/products?name={prefix.ToUpperInvariant()}&pageSize=2&pageNumber=1", customer);
-        all.Json.GetProperty("totalCount").GetInt32().Should().Be(5);
-        all.Json.GetProperty("pagesCount").GetInt32().Should().Be(3);
-        all.Json.GetProperty("data").GetArrayLength().Should().Be(2);
-        all.Json.GetProperty("isLast").GetBoolean().Should().BeFalse();
+        // First page (limit 2)
+        var page1 = await api.GetAsync($"/api/customer/products?name={prefix.ToUpperInvariant()}&limit=2", customer);
+        page1.Json.GetProperty("data").GetArrayLength().Should().Be(2);
+        page1.Json.GetProperty("hasMore").GetBoolean().Should().BeTrue();
+        var cursor1 = page1.Json.GetProperty("nextCursor").GetString();
+        cursor1.Should().NotBeNullOrWhiteSpace();
 
-        var last = await api.GetAsync($"/api/products?name={prefix}&pageSize=2&pageNumber=3", customer);
-        last.Json.GetProperty("data").GetArrayLength().Should().Be(1);
-        last.Json.GetProperty("isLast").GetBoolean().Should().BeTrue();
+        // Second page
+        var page2 = await api.GetAsync($"/api/customer/products?name={prefix}&limit=2&cursor={cursor1}", customer);
+        page2.Json.GetProperty("data").GetArrayLength().Should().Be(2);
+        page2.Json.GetProperty("hasMore").GetBoolean().Should().BeTrue();
+        var cursor2 = page2.Json.GetProperty("nextCursor").GetString();
+        cursor2.Should().NotBeNullOrWhiteSpace();
 
-        var beyond = await api.GetAsync($"/api/products?name={prefix}&pageSize=2&pageNumber=9", customer);
-        (beyond.Status, beyond.Json.GetProperty("data").GetArrayLength(), beyond.Json.GetProperty("totalCount").GetInt32()).Should().Be((200, 0, 5));
+        // Ensure no duplicates between pages
+        var page1Ids = page1.Json.GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetString()).ToList();
+        var page2Ids = page2.Json.GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetString()).ToList();
+        page1Ids.Intersect(page2Ids).Should().BeEmpty();
 
-        var gardens = await api.GetAsync($"/api/products?name={prefix}&category=GARDEN", customer);
-        gardens.Json.GetProperty("totalCount").GetInt32().Should().Be(3);
+        // Third/last page
+        var page3 = await api.GetAsync($"/api/customer/products?name={prefix}&limit=2&cursor={cursor2}", customer);
+        page3.Json.GetProperty("data").GetArrayLength().Should().Be(1);
+        page3.Json.GetProperty("hasMore").GetBoolean().Should().BeFalse();
+        (page3.Json.GetProperty("nextCursor").ValueKind == System.Text.Json.JsonValueKind.Null).Should().BeTrue();
 
-        (await api.GetAsync($"/api/products?name={prefix}%25", customer)).Json.GetProperty("totalCount").GetInt32()
+        var page3Ids = page3.Json.GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetString()).ToList();
+        page1Ids.Concat(page2Ids).Concat(page3Ids).Should().HaveCount(5);
+
+        // Category filter
+        var gardens = await api.GetAsync($"/api/customer/products?name={prefix}&category=GARDEN&limit=10", customer);
+        gardens.Json.GetProperty("data").GetArrayLength().Should().Be(3);
+        gardens.Json.GetProperty("hasMore").GetBoolean().Should().BeFalse();
+
+        // Literal %
+        (await api.GetAsync($"/api/customer/products?name={prefix}%25", customer)).Json.GetProperty("data").GetArrayLength()
             .Should().Be(0, "% is searched literally, not as a wildcard");
     }
 
@@ -196,8 +217,42 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
     {
         var customer = await api.Customer1Token();
 
-        foreach (var query in new[] { "pageSize=0", "pageSize=51", "pageNumber=0", "pageNumber=-1", "category=toys", "pageSize=abc" })
-            (await api.GetAsync($"/api/products?{query}", customer)).Status.Should().Be(400, query);
+        foreach (var query in new[] { "limit=0", "limit=51", "limit=-1", "limit=abc", "category=toys", "cursor=not-a-valid-cursor" })
+            (await api.GetAsync($"/api/customer/products?{query}", customer)).Status.Should().Be(400, query);
+    }
+
+    [SqlServerFact]
+    public async Task AdminProductList_UsesPageOffsetPagination_WithTotals_ZeroBased()
+    {
+        var prefix = "Adm-" + Guid.NewGuid().ToString("N")[..8];
+        for (var i = 1; i <= 5; i++)
+            await api.NewProductAsync(category: i <= 3 ? "garden" : "electronics", name: $"{prefix} item {i}");
+        var admin = await api.AdminToken();
+
+        var first = await api.GetAsync($"/api/admin/products?name={prefix}&pageNumber=0&pageSize=2", admin);
+        (first.Json.GetProperty("currentPage").GetInt32(), first.Json.GetProperty("pagesCount").GetInt32(),
+            first.Json.GetProperty("totalCount").GetInt32(), first.Json.GetProperty("isLast").GetBoolean())
+            .Should().Be((0, 3, 5, false));
+        first.Json.GetProperty("data").GetArrayLength().Should().Be(2);
+        first.Json.TryGetProperty("nextCursor", out _).Should().BeFalse("the admin list has no cursor");
+
+        var last = await api.GetAsync($"/api/admin/products?name={prefix}&page=2&size=2", admin);
+        (last.Json.GetProperty("currentPage").GetInt32(), last.Json.GetProperty("isLast").GetBoolean(), last.Json.GetProperty("data").GetArrayLength())
+            .Should().Be((2, true, 1));
+
+        var beyond = await api.GetAsync($"/api/admin/products?name={prefix}&pageNumber=9&pageSize=2", admin);
+        (beyond.Status, beyond.Json.GetProperty("data").GetArrayLength(), beyond.Json.GetProperty("totalCount").GetInt32()).Should().Be((200, 0, 5));
+
+        (await api.GetAsync($"/api/admin/products?name={prefix}&category=GARDEN", admin)).Json.GetProperty("totalCount").GetInt32().Should().Be(3);
+
+        var ids = new List<string>();
+        for (var page = 0; page < 3; page++)
+            ids.AddRange((await api.GetAsync($"/api/admin/products?name={prefix}&pageNumber={page}&pageSize=2", admin))
+                .Json.GetProperty("data").EnumerateArray().Select(p => p.GetProperty("id").GetString()!));
+        ids.Should().HaveCount(5).And.OnlyHaveUniqueItems();
+
+        foreach (var query in new[] { "pageSize=0", "pageSize=51", "pageNumber=-1", "category=toys" })
+            (await api.GetAsync($"/api/admin/products?{query}", admin)).Status.Should().Be(400, query);
     }
 
     // ------------------------------------------------------------------ orders
@@ -424,15 +479,17 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
     }
 
     [SqlServerFact]
-    public async Task Swagger_HasOneDocumentPerRole_WithOnlyThatRolesEndpoints_AndLoginInBoth()
+    public async Task Swagger_HasOneDocumentPerRole_WithOnlyThatRolesEndpoints_AndLoginInBoth_PlusACombinedReference()
     {
-        (await OperationsOf("1-admin")).Should().Equal("GET /api/orders", "GET /api/products",
+        (await OperationsOf("1-admin")).Should().Equal("GET /api/admin/products", "GET /api/orders",
             "POST /api/auth/login", "POST /api/products", "PUT /api/products/{id}");
 
-        (await OperationsOf("2-customer")).Should().Equal("GET /api/orders/my", "GET /api/products",
+        (await OperationsOf("2-customer")).Should().Equal("GET /api/customer/products", "GET /api/orders/my",
             "POST /api/auth/login", "POST /api/orders");
 
-        (await api.GetAsync("/swagger/v1/swagger.json")).Status.Should().Be(404, "there is no combined document");
+        // The combined reference (also used by the Scalar page) lists every endpoint once.
+        (await OperationsOf("v1")).Should().Equal("GET /api/admin/products", "GET /api/customer/products", "GET /api/orders",
+            "GET /api/orders/my", "POST /api/auth/login", "POST /api/orders", "POST /api/products", "PUT /api/products/{id}");
     }
 
     // ------------------------------------------------------------------ audit trail (database triggers)

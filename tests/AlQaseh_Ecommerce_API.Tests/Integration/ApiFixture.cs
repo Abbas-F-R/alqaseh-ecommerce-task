@@ -136,7 +136,7 @@ public sealed class ApiFixture : IAsyncLifetime
     /// <summary>The exact stock of a product, as the admin list shows it.</summary>
     public async Task<int> StockOf(TestProduct product)
     {
-        var page = await GetAsync($"/api/products?name={Uri.EscapeDataString(product.Name)}", await AdminToken());
+        var page = await GetAsync($"/api/admin/products?name={Uri.EscapeDataString(product.Name)}", await AdminToken());
         return page.Json.GetProperty("data").EnumerateArray().Single(p => p.GetProperty("id").GetString() == product.Id)
             .GetProperty("availableQuantity").GetInt32();
     }
