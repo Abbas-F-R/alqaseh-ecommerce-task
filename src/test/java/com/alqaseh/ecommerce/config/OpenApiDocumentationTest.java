@@ -58,7 +58,7 @@ class OpenApiDocumentationTest {
     void exactEndpointSet() {
         assertThat(operations()).containsExactlyInAnyOrder(
                 "POST /api/auth/login",
-                "GET /api/products", "POST /api/products", "PUT /api/products/{id}",
+                "GET /api/admin/products", "GET /api/customer/products", "POST /api/products", "PUT /api/products/{id}",
                 "POST /api/orders", "GET /api/orders", "GET /api/orders/my");
         assertThat(operations()).noneMatch(op -> op.startsWith("DELETE") || op.startsWith("PATCH"));
     }
@@ -67,18 +67,18 @@ class OpenApiDocumentationTest {
     @DisplayName("Each role has its own documentation group with only its endpoints")
     void roleGroups() throws Exception {
         assertThat(groupOperations("1-admin")).containsExactlyInAnyOrder("POST /api/auth/login",
-                "GET /api/products", "POST /api/products", "PUT /api/products/{id}", "GET /api/orders");
+                "GET /api/admin/products", "POST /api/products", "PUT /api/products/{id}", "GET /api/orders");
         assertThat(groupOperations("2-customer")).containsExactlyInAnyOrder("POST /api/auth/login",
-                "GET /api/products", "POST /api/orders", "GET /api/orders/my");
+                "GET /api/customer/products", "POST /api/orders", "GET /api/orders/my");
     }
 
     @Test
-    @DisplayName("The shared product list shows each role its own response schema")
+    @DisplayName("Each role has its own product list endpoint with its own response schema")
     void productListPerRole() throws Exception {
-        for (String[] g : new String[][]{{"1-admin", "AdminProductResponse"}, {"2-customer", "CustomerProductResponse"}}) {
+        for (String[] g : new String[][]{{"1-admin", "admin", "PageResponseAdminProductResponse"}, {"2-customer", "customer", "CursorResponseCustomerProductResponse"}}) {
             JsonNode doc = objectMapper.readTree(mockMvc.perform(get("/v3/api-docs/" + g[0])).andReturn().getResponse().getContentAsString());
-            JsonNode schema = doc.at("/paths/~1api~1products/get/responses/200/content/application~1json/schema");
-            assertThat(schema.get("$ref").asText()).isEqualTo("#/components/schemas/ApiResponsePageResponse" + g[1]);
+            JsonNode schema = doc.at("/paths/~1api~1" + g[1] + "~1products/get/responses/200/content/application~1json/schema");
+            assertThat(schema.get("$ref").asText()).isEqualTo("#/components/schemas/" + g[2]);
         }
     }
 
@@ -102,13 +102,18 @@ class OpenApiDocumentationTest {
     }
 
     @Test
-    @DisplayName("Query parameters of the list endpoints are expanded (name, category, page, size ...), not one opaque object")
+    @DisplayName("Query parameters of the list endpoints are expanded (name, category, limit, cursor, page, size ...), not one opaque object")
     void listParametersAreExpanded() {
-        assertThat(parameterNames("/api/products", "get")).containsExactlyInAnyOrder("name", "category", "page", "size");
+        assertThat(parameterNames("/api/admin/products", "get")).containsExactlyInAnyOrder("name", "category", "page", "size");
+        assertThat(parameterNames("/api/customer/products", "get")).containsExactlyInAnyOrder("name", "category", "limit", "cursor");
         assertThat(parameterNames("/api/orders", "get")).containsExactlyInAnyOrder("customer", "customerId", "paymentMethod", "page", "size");
         assertThat(parameterNames("/api/orders/my", "get")).containsExactlyInAnyOrder("page", "size");
         assertThat(api.at("/paths/~1api~1orders/get/parameters").findValues("name")).extracting(JsonNode::asText).doesNotContain("filter");
-        assertThat(api.at("/paths/~1api~1products/get/parameters/3/schema/maximum").asInt()).isEqualTo(50);
+        JsonNode limitParam = java.util.stream.StreamSupport.stream(api.at("/paths/~1api~1customer~1products/get/parameters").spliterator(), false)
+                .filter(p -> "limit".equals(p.get("name").asText()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(limitParam.at("/schema/maximum").asInt()).isEqualTo(50);
     }
 
     private Set<String> parameterNames(String path, String method) {
@@ -123,7 +128,8 @@ class OpenApiDocumentationTest {
         assertThat(statuses("/api/auth/login", "post")).containsExactly("200", "400", "401");
         assertThat(statuses("/api/products", "post")).containsExactly("201", "400", "409");
         assertThat(statuses("/api/products/{id}", "put")).containsExactly("200", "400", "404", "409");
-        assertThat(statuses("/api/products", "get")).containsExactly("200", "400");
+        assertThat(statuses("/api/admin/products", "get")).containsExactly("200", "400");
+        assertThat(statuses("/api/customer/products", "get")).containsExactly("200", "400");
         assertThat(statuses("/api/orders", "post")).containsExactly("201", "400", "402", "404", "409");
         assertThat(statuses("/api/orders/my", "get")).containsExactly("200", "400");
         assertThat(statuses("/api/orders", "get")).containsExactly("200", "400");
@@ -157,8 +163,11 @@ class OpenApiDocumentationTest {
         assertThat(api.at("/paths/~1api~1orders/post/responses/201/content/application~1json/schema/$ref").asText())
                 .isEqualTo("#/components/schemas/ApiResponseCustomerOrderResponse");
         assertThat(api.at("/paths/~1api~1orders/get/responses/200/content/application~1json/schema/$ref").asText())
-                .isEqualTo("#/components/schemas/ApiResponsePageResponseAdminOrderResponse");
-        assertThat(api.at("/paths/~1api~1products/get/responses/200/content/application~1json/schema/oneOf").size()).isEqualTo(2);
+                .isEqualTo("#/components/schemas/PageResponseAdminOrderResponse");
+        assertThat(api.at("/paths/~1api~1admin~1products/get/responses/200/content/application~1json/schema/$ref").asText())
+                .isEqualTo("#/components/schemas/PageResponseAdminProductResponse");
+        assertThat(api.at("/paths/~1api~1customer~1products/get/responses/200/content/application~1json/schema/$ref").asText())
+                .isEqualTo("#/components/schemas/CursorResponseCustomerProductResponse");
     }
 
     @Test

@@ -7,6 +7,7 @@ import com.alqaseh.ecommerce.features.product.dto.response.AdminProductResponse;
 import com.alqaseh.ecommerce.features.product.dto.response.CustomerProductResponse;
 import com.alqaseh.ecommerce.shared.response.ApiErrorResponse;
 import com.alqaseh.ecommerce.shared.response.ApiResponse;
+import com.alqaseh.ecommerce.shared.response.CursorResponse;
 import com.alqaseh.ecommerce.shared.response.PageResponse;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.type.TypeFactory;
@@ -88,7 +89,7 @@ public class OpenApiConfig {
     /** Groups the operations whose {@code @PreAuthorize} mentions the role (shared endpoints appear in both groups). */
     private static GroupedOpenApi roleGroup(String group, String displayName, String role, String description) {
         return GroupedOpenApi.builder().group(group).displayName(displayName)
-                .pathsToMatch("/api/auth/**", "/api/products/**", "/api/orders/**")
+                .pathsToMatch("/api/auth/**", "/api/products/**", "/api/admin/**", "/api/customer/**", "/api/orders/**")
                 .addOpenApiMethodFilter(method -> {
                     PreAuthorize rule = method.getAnnotation(PreAuthorize.class);
                     return rule == null /* login: open to both roles */ || rule.value().contains("'" + role + "'");
@@ -96,25 +97,8 @@ public class OpenApiConfig {
                 .addOpenApiCustomizer(o -> {
                     o.getInfo().description(description);
                     document(o);
-                    roleProductList(o, "ADMIN".equals(role));
                 })
                 .build();
-    }
-
-    /** The shared product list is one endpoint; each role's document shows only what that role receives. */
-    private static void roleProductList(OpenAPI openApi, boolean admin) {
-        if (openApi.getPaths() == null) {
-            return;
-        }
-        openApi.getPaths().values().stream().flatMap(item -> item.readOperations().stream())
-                .filter(op -> "listProducts".equals(op.getOperationId())).findFirst().ifPresent(op -> {
-                    op.setDescription(admin
-                            ? "Optional filters: name, category. Includes cost and availableQuantity."
-                            : "Optional filters: name, category. Includes stockStatus (low, limited, available).");
-                    var json = op.getResponses().get("200").getContent().get(JSON);
-                    json.setSchema(register(openApi, ApiResponse.class, page(admin ? AdminProductResponse.class : CustomerProductResponse.class)));
-                    json.setExamples(Doc.examples(ex("Products", admin ? PRODUCT_PAGE_ADMIN : PRODUCT_PAGE_CUSTOMER)));
-                });
     }
 
     @Bean
@@ -130,15 +114,15 @@ public class OpenApiConfig {
         Schema<?> error = register(openApi, ApiErrorResponse.class);
         Schema<?> login = register(openApi, ApiResponse.class, LoginResponse.class);
         Schema<?> productAdmin = register(openApi, ApiResponse.class, AdminProductResponse.class);
-        Schema<?> productsAdmin = register(openApi, ApiResponse.class, page(AdminProductResponse.class));
-        Schema<?> productsCustomer = register(openApi, ApiResponse.class, page(CustomerProductResponse.class));
-        Schema<?> products = new ComposedSchema().oneOf(List.of(productsAdmin, productsCustomer))
-                .description("Admins receive AdminProductResponse rows, customers CustomerProductResponse rows");
+        Schema<?> productsAdmin = register(openApi, PageResponse.class, AdminProductResponse.class);
+        Schema<?> productsCustomer = register(openApi, CursorResponse.class, CustomerProductResponse.class);
         Schema<?> order = register(openApi, ApiResponse.class, CustomerOrderResponse.class);
-        Schema<?> myOrders = register(openApi, ApiResponse.class, page(CustomerOrderResponse.class));
-        Schema<?> allOrders = register(openApi, ApiResponse.class, page(AdminOrderResponse.class));
+        Schema<?> myOrders = register(openApi, PageResponse.class, CustomerOrderResponse.class);
+        Schema<?> allOrders = register(openApi, PageResponse.class, AdminOrderResponse.class);
 
-        openApi.getComponents().getSchemas().remove("ApiResponseObject"); // springdoc artefact of ResponseEntity<ApiResponse<?>>
+        openApi.getComponents().getSchemas().remove("ApiResponseObject"); // springdoc artefact
+        openApi.getComponents().getSchemas().remove("PageResponseObject");
+        openApi.getComponents().getSchemas().remove("CursorResponseObject");
 
         Docs docs = new Docs(openApi, error);
 
@@ -162,9 +146,13 @@ public class OpenApiConfig {
                 .error(409, "Name already used, or the product was changed at the same time; retry",
                         ex("PRODUCT_NAME_ALREADY_EXISTS", PRODUCT_NAME_EXISTS), ex("CONCURRENT_MODIFICATION", CONCURRENT_MODIFICATION_PRODUCT)));
 
-        docs.operation("listProducts", d -> d
-                .success(200, "A page of products", products, ex("Products", PRODUCT_PAGE_ADMIN))
-                .error(400, "Invalid page, size or category", ex("VALIDATION_ERROR", validationPagination("/api/products"))));
+        docs.operation("listProductsForAdmin", d -> d
+                .success(200, "A page of products with cost and exact quantity (page/offset pagination, with totals)", productsAdmin, ex("Products", PRODUCT_PAGE_ADMIN))
+                .error(400, "Invalid page, size or category", ex("VALIDATION_ERROR", validationPagination("/api/admin/products"))));
+
+        docs.operation("listProductsForCustomer", d -> d
+                .success(200, "A page of products with a stock status (keyset pagination)", productsCustomer, ex("Products", PRODUCT_PAGE_CUSTOMER))
+                .error(400, "Invalid limit, cursor or category", ex("VALIDATION_ERROR", validationCursor("/api/customer/products"))));
 
         docs.operation("createOrder", d -> d
                 .request(ex("Credit card with discount code", ORDER_CARD_WITH_DISCOUNT), ex("XYZ wallet", ORDER_WALLET))

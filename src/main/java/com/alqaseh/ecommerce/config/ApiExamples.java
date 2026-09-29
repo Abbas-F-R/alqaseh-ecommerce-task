@@ -51,7 +51,7 @@ public final class ApiExamples {
             {
               "timestamp": "%s",
               "success": true,
-              "data": {"token": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJhZG1pbiIsImlhdCI6MTc1OTE0MDkzMH0.Xk2...", "type": "Bearer", "username": "admin", "role": "ADMIN"}
+              "data": {"token": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJhZG1pbiIsImlhdCI6MTc1OTE0MDkzMH0.Xk2...", "username": "admin", "role": "ADMIN"}
             }""".formatted(TS);
 
     public static final String PRODUCT_ADMIN = """
@@ -66,41 +66,30 @@ public final class ApiExamples {
 
     public static final String PRODUCT_PAGE_ADMIN = """
             {
-              "timestamp": "%s",
-              "success": true,
-              "data": {
-                "content": [{
-                  "id": "%s", "name": "Smartphone Pro Max", "category": "electronics", "price": 1200.00, "cost": 850.00,
-                  "availableQuantity": 25, "createdBy": null, "createdAt": "%s", "updatedBy": null, "updatedAt": null
-                }],
-                "pageNumber": 0, "pageSize": 10, "totalElements": 1, "totalPages": 1,
-                "first": true, "last": true, "hasNext": false, "hasPrevious": false
-              }
-            }""".formatted(TS, PRODUCT_ID, TS);
+              "data": [{
+                "id": "%s", "name": "Smartphone Pro Max", "category": "electronics", "price": 1200.00, "cost": 850.00,
+                "availableQuantity": 25, "createdBy": null, "createdAt": "%s", "updatedBy": null, "updatedAt": null
+              }],
+              "pagesCount": 1,
+              "currentPage": 0,
+              "totalCount": 1,
+              "isLast": true
+            }""".formatted(PRODUCT_ID, TS);
 
     public static final String PRODUCT_PAGE_CUSTOMER = """
             {
-              "timestamp": "%s",
-              "success": true,
-              "data": {
-                "content": [
-                  {"id": "%s", "name": "Smartphone Pro Max", "category": "electronics", "price": 1200.00, "stockStatus": "available"},
-                  {"id": "01923450-0000-7000-8000-000000000002", "name": "Oak Dining Table", "category": "furniture", "price": 450.00, "stockStatus": "low"}
-                ],
-                "pageNumber": 0, "pageSize": 10, "totalElements": 2, "totalPages": 1,
-                "first": true, "last": true, "hasNext": false, "hasPrevious": false
-              }
-            }""".formatted(TS, PRODUCT_ID);
+              "data": [
+                {"id": "%s", "name": "Smartphone Pro Max", "category": "electronics", "price": 1200.00, "stockStatus": "available"},
+                {"id": "01923450-0000-7000-8000-000000000002", "name": "Oak Dining Table", "category": "furniture", "price": 450.00, "stockStatus": "low"}
+              ],
+              "nextCursor": null,
+              "hasMore": false
+            }""".formatted(PRODUCT_ID);
 
     public static final String PAGE_EMPTY_PRODUCTS = """
             {
-              "timestamp": "%s",
-              "success": true,
-              "data": {
-                "content": [], "pageNumber": 0, "pageSize": 10, "totalElements": 0, "totalPages": 0,
-                "first": true, "last": true, "hasNext": false, "hasPrevious": false
-              }
-            }""".formatted(TS);
+              "data": [], "nextCursor": null, "hasMore": false
+            }""";
 
     public static final String ORDER_CREATED = """
             {
@@ -114,35 +103,25 @@ public final class ApiExamples {
 
     public static final String MY_ORDERS_PAGE = """
             {
-              "timestamp": "%s",
-              "success": true,
-              "data": {
-                "content": [{
-                  "id": "%s", "totalPrice": 2390.00, "paymentMethod": "CreditCard", "purchaseDate": "%s", "discountAmount": 10.00,
-                  "items": [{"productId": "%s", "productName": "Smartphone Pro Max", "unitPrice": 1200.00, "quantity": 2, "subtotal": 2400.00}]
-                }],
-                "pageNumber": 0, "pageSize": 10, "totalElements": 1, "totalPages": 1,
-                "first": true, "last": true, "hasNext": false, "hasPrevious": false
-              }
-            }""".formatted(TS, ORDER_ID, TS, PRODUCT_ID);
+              "data": [{
+                "id": "%s", "totalPrice": 2390.00, "paymentMethod": "CreditCard", "purchaseDate": "%s", "discountAmount": 10.00,
+                "items": [{"productId": "%s", "productName": "Smartphone Pro Max", "unitPrice": 1200.00, "quantity": 2, "subtotal": 2400.00}]
+              }],
+              "pagesCount": 1, "currentPage": 0, "totalCount": 1, "isLast": true
+            }""".formatted(ORDER_ID, TS, PRODUCT_ID);
 
     public static final String PAGE_EMPTY_ORDERS = PAGE_EMPTY_PRODUCTS;
 
     public static final String ADMIN_ORDERS_PAGE = """
             {
-              "timestamp": "%s",
-              "success": true,
-              "data": {
-                "content": [{
-                  "id": "%s", "customerId": "%s", "customerUsername": "customer1",
-                  "subtotalAmount": 2400.00, "discountAmount": 10.00, "totalAmount": 2390.00, "totalCost": 1700.00, "profit": 690.00,
-                  "paymentMethod": "CreditCard", "purchaseDate": "%s",
-                  "items": [{"productId": "%s", "productName": "Smartphone Pro Max", "unitPrice": 1200.00, "quantity": 2, "subtotal": 2400.00}]
-                }],
-                "pageNumber": 0, "pageSize": 10, "totalElements": 1, "totalPages": 1,
-                "first": true, "last": true, "hasNext": false, "hasPrevious": false
-              }
-            }""".formatted(TS, ORDER_ID, USER_ID, TS, PRODUCT_ID);
+              "data": [{
+                "id": "%s", "customerId": "%s", "customerUsername": "customer1",
+                "subtotalAmount": 2400.00, "discountAmount": 10.00, "totalAmount": 2390.00, "totalCost": 1700.00, "profit": 690.00,
+                "paymentMethod": "CreditCard", "purchaseDate": "%s",
+                "items": [{"productId": "%s", "productName": "Smartphone Pro Max", "unitPrice": 1200.00, "quantity": 2, "subtotal": 2400.00}]
+              }],
+              "pagesCount": 1, "currentPage": 0, "totalCount": 1, "isLast": true
+            }""".formatted(ORDER_ID, USER_ID, TS, PRODUCT_ID);
 
     // ------------------------------------------------------------------ error responses (ApiErrorResponse)
 
@@ -177,6 +156,15 @@ public final class ApiExamples {
                   "timestamp": "%s", "status": 400, "code": "VALIDATION_ERROR", "message": "Validation failed for one or more fields",
                   "path": "%s",
                   "validationErrors": {"size": "Page size cannot exceed 50", "page": "Page number cannot be negative"}
+                }""".formatted(TS, path);
+    }
+
+    public static String validationCursor(String path) {
+        return """
+                {
+                  "timestamp": "%s", "status": 400, "code": "VALIDATION_ERROR", "message": "Validation failed for one or more fields",
+                  "path": "%s",
+                  "validationErrors": {"limit": "Limit cannot exceed 50"}
                 }""".formatted(TS, path);
     }
 
