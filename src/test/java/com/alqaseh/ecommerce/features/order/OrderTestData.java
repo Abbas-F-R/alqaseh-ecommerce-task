@@ -23,8 +23,12 @@ public final class OrderTestData {
                 .price(BigDecimal.valueOf(price)).cost(BigDecimal.valueOf(cost)).availableQuantity(stock).build());
     }
 
-    /** One order for {@code customer} with {@code lines} lines of {@code product}, paid with {@code method}. */
-    public static Order saveOrder(OrderRepository repository, User customer, Product product, int lines, PaymentMethod method) {
+    /**
+     * One order for {@code customer} with {@code lines} lines paid with {@code method}: the first line is {@code product},
+     * every further line is a product of its own (an order has one line per product, a database rule).
+     */
+    public static Order saveOrder(OrderRepository repository, ProductRepository products, User customer, Product product,
+                                  int lines, PaymentMethod method) {
         Order order = Order.builder()
                 .customer(customer)
                 .subtotalAmount(product.getPrice().multiply(BigDecimal.valueOf(lines)))
@@ -35,8 +39,11 @@ public final class OrderTestData {
                 .status(OrderStatus.COMPLETED)
                 .build();
         for (int i = 0; i < lines; i++) {
-            order.addItem(OrderItem.builder().product(product).productName(product.getName())
-                    .unitPrice(product.getPrice()).unitCost(product.getCost()).quantity(1).build());
+            Product line = i == 0 ? product
+                    : saveProduct(products, product.getName() + " line " + i + " " + System.nanoTime(),
+                            product.getPrice().intValue(), product.getCost().intValue(), 50);
+            order.addItem(OrderItem.builder().product(line).productName(line.getName())
+                    .unitPrice(line.getPrice()).unitCost(line.getCost()).quantity(1).build());
         }
         return repository.saveAndFlush(order);
     }

@@ -21,8 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -128,12 +130,12 @@ class ProductControllerIntegrationTest {
                 .build();
         productRepository.save(product);
 
-        mockMvc.perform(get("/api/products"))
+        mockMvc.perform(get("/api/customer/products"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].name", is("Luxury Perfume")))
-                .andExpect(jsonPath("$.data.content[0].stockStatus", is("low")))
-                .andExpect(jsonPath("$.data.content[0].cost").doesNotExist())
-                .andExpect(jsonPath("$.data.content[0].availableQuantity").doesNotExist());
+                .andExpect(jsonPath("$.data[0].name", is("Luxury Perfume")))
+                .andExpect(jsonPath("$.data[0].stockStatus", is("low")))
+                .andExpect(jsonPath("$.data[0].cost").doesNotExist())
+                .andExpect(jsonPath("$.data[0].availableQuantity").doesNotExist());
     }
 
     @Test
@@ -149,11 +151,11 @@ class ProductControllerIntegrationTest {
                 .build();
         productRepository.save(product);
 
-        mockMvc.perform(get("/api/products"))
+        mockMvc.perform(get("/api/admin/products"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].name", is("Luxury Perfume")))
-                .andExpect(jsonPath("$.data.content[0].cost", is(40.0)))
-                .andExpect(jsonPath("$.data.content[0].availableQuantity", is(12)));
+                .andExpect(jsonPath("$.data[0].name", is("Luxury Perfume")))
+                .andExpect(jsonPath("$.data[0].cost", is(40.0)))
+                .andExpect(jsonPath("$.data[0].availableQuantity", is(12)));
     }
 
     @Test
@@ -190,5 +192,97 @@ class ProductControllerIntegrationTest {
         assertThat(Instant.parse(data.get("updatedAt").asText())).isAfter(before);
         assertThat(data.get("updatedBy").asText()).isEqualTo(data.get("createdBy").asText());
         assertThat(data.get("createdAt").asText()).isEqualTo(product.getCreatedAt().toString());
+    }
+
+    @Test
+    @WithMockUser(username = "customer1", roles = {"CUSTOMER"})
+    @DisplayName("Customer list: keyset pagination progresses across pages with nextCursor and no duplicates")
+    void keysetPaginationProgression() throws Exception {
+        for (int i = 1; i <= 4; i++) {
+            productRepository.save(Product.builder()
+                    .name("Product " + i)
+                    .category(ProductCategory.ELECTRONICS)
+                    .price(BigDecimal.valueOf(10.0 * i))
+                    .cost(BigDecimal.valueOf(5.0 * i))
+                    .availableQuantity(10)
+                    .build());
+        }
+
+        String page1Json = mockMvc.perform(get("/api/customer/products").param("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.hasMore", is(true)))
+                .andExpect(jsonPath("$.nextCursor", notNullValue()))
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode page1 = objectMapper.readTree(page1Json);
+        String nextCursor = page1.get("nextCursor").asText();
+        String id1 = page1.get("data").get(0).get("id").asText();
+        String id2 = page1.get("data").get(1).get("id").asText();
+
+        String page2Json = mockMvc.perform(get("/api/customer/products").param("limit", "2").param("cursor", nextCursor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode page2 = objectMapper.readTree(page2Json);
+        String id3 = page2.get("data").get(0).get("id").asText();
+        String id4 = page2.get("data").get(1).get("id").asText();
+
+        assertThat(List.of(id1, id2)).doesNotContain(id3, id4);
+    }
+
+    @Test
+    @WithMockUser(username = "customer1", roles = {"CUSTOMER"})
+    @DisplayName("Invalid cursor yields 400 Bad Request")
+    void invalidCursorYieldsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/customer/products").param("cursor", "invalid-token-here"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")))
+                .andExpect(jsonPath("$.validationErrors.cursor", notNullValue()));
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"ADMIN"})
+    @DisplayName("Admin list: page/offset pagination from page 0 with totals, filters and validation; no cursor")
+    void adminListUsesPageOffsetPagination() throws Exception {
+        for (int i = 1; i <= 5; i++) {
+            productRepository.save(Product.builder().name("Paged " + i)
+                    .category(i <= 3 ? ProductCategory.GARDEN : ProductCategory.BEAUTY)
+                    .price(BigDecimal.TEN).cost(BigDecimal.ONE).availableQuantity(10).build());
+        }
+
+        mockMvc.perform(get("/api/admin/products").param("name", "paged").param("page", "0").param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.currentPage", is(0)))
+                .andExpect(jsonPath("$.pagesCount", is(3)))
+                .andExpect(jsonPath("$.totalCount", is(5)))
+                .andExpect(jsonPath("$.isLast", is(false)))
+                .andExpect(jsonPath("$.nextCursor").doesNotExist())
+                .andExpect(jsonPath("$.data[0].availableQuantity", is(10)));
+
+        mockMvc.perform(get("/api/admin/products").param("name", "paged").param("page", "2").param("size", "2"))
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.isLast", is(true)));
+
+        mockMvc.perform(get("/api/admin/products").param("name", "paged").param("page", "9").param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(0)))
+                .andExpect(jsonPath("$.totalCount", is(5)));
+
+        mockMvc.perform(get("/api/admin/products").param("name", "paged").param("category", "garden"))
+                .andExpect(jsonPath("$.totalCount", is(3)));
+
+        for (String[] bad : new String[][]{{"size", "0"}, {"size", "51"}, {"page", "-1"}, {"category", "toys"}}) {
+            mockMvc.perform(get("/api/admin/products").param(bad[0], bad[1])).andExpect(status().isBadRequest());
+        }
+    }
+
+    @Test
+    @WithMockUser(username = "customer1", roles = {"CUSTOMER"})
+    @DisplayName("Each role can only use its own list endpoint")
+    void listEndpointsAreRoleSpecific() throws Exception {
+        mockMvc.perform(get("/api/admin/products")).andExpect(status().isForbidden());
     }
 }

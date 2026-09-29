@@ -175,7 +175,7 @@ class OrderControllerIntegrationTest {
     void adminCanListAllOrdersWithProfit() throws Exception {
         mockMvc.perform(get("/api/orders"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content", notNullValue()));
+                .andExpect(jsonPath("$.data", notNullValue()));
     }
 
     @Test

@@ -109,13 +109,16 @@ class RequestValidationIntegrationTest {
 
     @Test
     @WithMockUser(roles = "CUSTOMER")
-    @DisplayName("Page size above the maximum or a negative page: 400 with the offending fields")
+    @DisplayName("Limit above the maximum, invalid cursor, or bad page: 400 with the offending fields")
     void invalidPagination() throws Exception {
-        mockMvc.perform(get("/api/products").param("size", "1000").param("page", "-1"))
+        mockMvc.perform(get("/api/customer/products").param("limit", "1000"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")))
-                .andExpect(jsonPath("$.validationErrors.size", notNullValue()))
-                .andExpect(jsonPath("$.validationErrors.page", notNullValue()));
+                .andExpect(jsonPath("$.validationErrors.limit", notNullValue()));
+        mockMvc.perform(get("/api/customer/products").param("cursor", "bad-cursor"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")))
+                .andExpect(jsonPath("$.validationErrors.cursor", notNullValue()));
         mockMvc.perform(get("/api/orders/my").param("size", "0"))
                 .andExpect(status().isBadRequest());
     }
@@ -124,7 +127,7 @@ class RequestValidationIntegrationTest {
     @WithMockUser(roles = "CUSTOMER")
     @DisplayName("Unknown category filter value: 400, not 500")
     void unknownCategoryFilter() throws Exception {
-        mockMvc.perform(get("/api/products").param("category", "TOYS"))
+        mockMvc.perform(get("/api/customer/products").param("category", "TOYS"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")))
                 .andExpect(jsonPath("$.validationErrors.category", is("Invalid value")))

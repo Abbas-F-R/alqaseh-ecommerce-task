@@ -47,17 +47,17 @@ public class OrderController extends BaseController {
     @PreAuthorize("hasRole('CUSTOMER')")
     @Operation(summary = "List my orders (customer only)",
             description = "Your own orders, newest first.")
-    public ResponseEntity<ApiResponse<PageResponse<CustomerOrderResponse>>> listMyOrders(
+    public ResponseEntity<PageResponse<CustomerOrderResponse>> listMyOrders(
             @Valid @ParameterObject PaginationRequest paging) {
-        return ResponseEntity.ok(ApiResponse.success(orderService.listMyOrders(paging)));
+        return ResponseEntity.ok(orderService.listMyOrders(paging));
     }
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "List all orders (admin only)",
             description = "Newest first, with cost and profit. Optional filters: customer, customerId, paymentMethod.")
-    public ResponseEntity<ApiResponse<PageResponse<AdminOrderResponse>>> listAllOrders(
+    public ResponseEntity<PageResponse<AdminOrderResponse>> listAllOrders(
             @Valid @ParameterObject OrderFilterRequest filter) {
-        return ResponseEntity.ok(ApiResponse.success(orderService.listAllOrders(filter)));
+        return ResponseEntity.ok(orderService.listAllOrders(filter));
     }
 }

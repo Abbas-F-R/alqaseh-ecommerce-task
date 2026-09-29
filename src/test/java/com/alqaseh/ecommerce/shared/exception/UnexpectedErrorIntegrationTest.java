@@ -41,14 +41,14 @@ class UnexpectedErrorIntegrationTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("Infrastructure failure: 500 INTERNAL_SERVER_ERROR without any internal detail")
     void databaseFailureIsAGenericServerError() throws Exception {
-        when(productService.listProducts(any())).thenThrow(new DataAccessResourceFailureException(
+        when(productService.listProductsForAdmin(any())).thenThrow(new DataAccessResourceFailureException(
                 "Connection to jdbc:postgresql://db.internal:5432/shop refused, password=hunter2"));
 
-        mockMvc.perform(get("/api/products"))
+        mockMvc.perform(get("/api/admin/products"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.status", is(500)))
                 .andExpect(jsonPath("$.code", is("INTERNAL_SERVER_ERROR")))
-                .andExpect(jsonPath("$.path", is("/api/products")))
+                .andExpect(jsonPath("$.path", is("/api/admin/products")))
                 .andExpect(jsonPath("$.debug").doesNotExist())
                 .andExpect(jsonPath("$.validationErrors").doesNotExist())
                 .andExpect(content().string(not(containsString("hunter2"))))
@@ -62,9 +62,9 @@ class UnexpectedErrorIntegrationTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("A programming bug (NullPointerException) is also a plain 500")
     void programmingBugIsAGenericServerError() throws Exception {
-        when(productService.listProducts(any())).thenThrow(new NullPointerException("internal state"));
+        when(productService.listProductsForAdmin(any())).thenThrow(new NullPointerException("internal state"));
 
-        mockMvc.perform(get("/api/products"))
+        mockMvc.perform(get("/api/admin/products"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code", is("INTERNAL_SERVER_ERROR")))
                 .andExpect(content().string(not(containsString("internal state"))));

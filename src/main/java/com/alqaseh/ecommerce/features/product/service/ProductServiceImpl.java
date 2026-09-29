@@ -1,24 +1,27 @@
 package com.alqaseh.ecommerce.features.product.service;
 
-import com.alqaseh.ecommerce.features.product.dto.request.ProductFilterRequest;
+import com.alqaseh.ecommerce.features.product.dto.request.AdminProductFilterRequest;
+import com.alqaseh.ecommerce.features.product.dto.request.CustomerProductFilterRequest;
 import com.alqaseh.ecommerce.features.product.dto.request.ProductRequest;
 import com.alqaseh.ecommerce.features.product.dto.response.AdminProductResponse;
+import com.alqaseh.ecommerce.features.product.dto.response.CustomerProductResponse;
 import com.alqaseh.ecommerce.features.product.entity.Product;
 import com.alqaseh.ecommerce.features.product.mapper.ProductMapper;
 import com.alqaseh.ecommerce.features.product.repository.ProductRepository;
 import com.alqaseh.ecommerce.features.product.repository.ProductSpecification;
-import com.alqaseh.ecommerce.infrastructure.security.SecurityUtils;
+import com.alqaseh.ecommerce.features.product.util.ProductCursor;
 import com.alqaseh.ecommerce.shared.audit.entity.AuditAction;
 import com.alqaseh.ecommerce.shared.audit.service.AuditService;
 import com.alqaseh.ecommerce.shared.error.ErrorCode;
+import com.alqaseh.ecommerce.shared.response.CursorResponse;
 import com.alqaseh.ecommerce.shared.response.PageResponse;
 import com.alqaseh.ecommerce.shared.result.Result;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -29,9 +32,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
-
-    // UUID v7 ids are time-ordered, so this is a stable "oldest first" order backed by the primary key.
-    private static final Sort LIST_ORDER = Sort.by("id");
 
     private final ProductRepository productRepository;
     private final ProductMapper productMapper;
@@ -72,13 +72,23 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<?> listProducts(ProductFilterRequest filter) {
-        Page<Product> page = productRepository.findAll(ProductSpecification.filterBy(filter), filter.toPageable(LIST_ORDER));
+    public PageResponse<AdminProductResponse> listProductsForAdmin(AdminProductFilterRequest filter) {
+        var page = productRepository.findAll(ProductSpecification.filterBy(filter), filter.toPageable(Sort.by("id")));
+        return PageResponse.of(page.map(productMapper::toAdminResponse));
+    }
 
-        if (SecurityUtils.isCurrentUserAdmin()) {
-            return PageResponse.of(page.map(productMapper::toAdminResponse));
-        }
-        return PageResponse.of(page.map(productMapper::toCustomerResponse));
+    /** One keyset page: limit + 1 rows tell whether there is a next page, so no count query and no OFFSET are needed. */
+    @Override
+    @Transactional(readOnly = true)
+    public CursorResponse<CustomerProductResponse> listProductsForCustomer(CustomerProductFilterRequest filter) {
+        int limit = filter.getLimit();
+        List<Product> products = productRepository.findProducts(filter, ProductCursor.decode(filter.getCursor()), limit + 1);
+
+        boolean hasMore = products.size() > limit;
+        List<Product> pageItems = hasMore ? products.subList(0, limit) : products;
+        String nextCursor = hasMore ? ProductCursor.encode(pageItems.get(pageItems.size() - 1).getId()) : null;
+
+        return new CursorResponse<>(pageItems.stream().map(productMapper::toCustomerResponse).toList(), nextCursor, hasMore);
     }
 
     private static String describe(Product p) {

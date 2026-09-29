@@ -1,6 +1,7 @@
 package com.alqaseh.ecommerce.features.product.service;
 
-import com.alqaseh.ecommerce.features.product.dto.request.ProductFilterRequest;
+import com.alqaseh.ecommerce.features.product.dto.request.AdminProductFilterRequest;
+import com.alqaseh.ecommerce.features.product.dto.request.CustomerProductFilterRequest;
 import com.alqaseh.ecommerce.features.product.dto.request.ProductRequest;
 import com.alqaseh.ecommerce.features.product.dto.response.AdminProductResponse;
 import com.alqaseh.ecommerce.features.product.dto.response.CustomerProductResponse;
@@ -12,8 +13,10 @@ import com.alqaseh.ecommerce.features.product.repository.ProductRepository;
 import com.alqaseh.ecommerce.infrastructure.security.UserPrincipal;
 import com.alqaseh.ecommerce.infrastructure.user.entity.Role;
 import com.alqaseh.ecommerce.shared.audit.entity.AuditAction;
+import com.alqaseh.ecommerce.features.product.util.ProductCursor;
 import com.alqaseh.ecommerce.shared.audit.service.AuditService;
 import com.alqaseh.ecommerce.shared.error.ErrorCode;
+import com.alqaseh.ecommerce.shared.response.CursorResponse;
 import com.alqaseh.ecommerce.shared.response.PageResponse;
 import com.alqaseh.ecommerce.shared.result.Result;
 import org.junit.jupiter.api.AfterEach;
@@ -25,9 +28,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,6 +39,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -170,30 +171,56 @@ class ProductServiceTest {
     @Test
     @DisplayName("List: admins see cost and exact quantity")
     void listForAdminExposesCostAndQuantity() {
-        authenticateAs(Role.ADMIN);
-        when(productRepository.findAll(any(Specification.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(existingProduct())));
+        when(productRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<Product>>any(), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(existingProduct()),
+                        org.springframework.data.domain.PageRequest.of(0, 10), 41));
 
-        PageResponse<?> response = productService.listProducts(new ProductFilterRequest());
+        PageResponse<AdminProductResponse> response = productService.listProductsForAdmin(new AdminProductFilterRequest());
 
-        AdminProductResponse row = (AdminProductResponse) response.content().get(0);
+        AdminProductResponse row = response.data().get(0);
         assertThat(row.getCost()).isEqualByComparingTo("120");
         assertThat(row.getAvailableQuantity()).isEqualTo(10);
+        assertThat(response.totalCount()).isEqualTo(41);
+        assertThat(response.pagesCount()).isEqualTo(5);
+        assertThat(response.currentPage()).isZero();
+        assertThat(response.isLast()).isFalse();
     }
 
     @Test
     @DisplayName("List: customers get only the stock status, never cost or exact quantity")
     void listForCustomerMasksCostAndQuantity() {
-        authenticateAs(Role.CUSTOMER);
         Product lowStock = existingProduct();
         lowStock.setAvailableQuantity(3);
-        when(productRepository.findAll(any(Specification.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(lowStock)));
+        when(productRepository.findProducts(any(), any(), anyInt()))
+                .thenReturn(List.of(lowStock));
 
-        PageResponse<?> response = productService.listProducts(new ProductFilterRequest());
+        CursorResponse<CustomerProductResponse> response = productService.listProductsForCustomer(new CustomerProductFilterRequest());
 
-        CustomerProductResponse row = (CustomerProductResponse) response.content().get(0);
+        CustomerProductResponse row = response.data().get(0);
         assertThat(row.getStockStatus()).isEqualTo(StockStatus.LOW);
         assertThat(row.getName()).isEqualTo("Old Chair");
+        assertThat(response.hasMore()).isFalse();
+        assertThat(response.nextCursor()).isNull();
+    }
+
+    @Test
+    @DisplayName("List: keyset pagination advances hasMore and encodes nextCursor")
+    void listKeysetPaginationHasMore() {
+        Product p1 = existingProduct();
+        UUID id2 = UUID.fromString("01923450-0000-7000-8000-000000000002");
+        Product p2 = Product.builder().id(id2).name("Desk").category(ProductCategory.FURNITURE)
+                .price(BigDecimal.valueOf(100)).cost(BigDecimal.valueOf(50)).availableQuantity(5).build();
+        Product p3 = Product.builder().id(UUID.fromString("01923450-0000-7000-8000-000000000003")).name("Table").category(ProductCategory.FURNITURE)
+                .price(BigDecimal.valueOf(200)).cost(BigDecimal.valueOf(80)).availableQuantity(8).build();
+
+        when(productRepository.findProducts(any(), any(), eq(3)))
+                .thenReturn(List.of(p1, p2, p3));
+
+        CustomerProductFilterRequest filter = CustomerProductFilterRequest.builder().limit(2).build();
+        CursorResponse<CustomerProductResponse> response = productService.listProductsForCustomer(filter);
+
+        assertThat(response.data()).hasSize(2);
+        assertThat(response.hasMore()).isTrue();
+        assertThat(response.nextCursor()).isEqualTo(ProductCursor.encode(id2));
     }
 }

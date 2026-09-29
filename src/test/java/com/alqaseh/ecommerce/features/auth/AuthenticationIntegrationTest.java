@@ -59,7 +59,7 @@ class AuthenticationIntegrationTest {
     void loginThenUseToken() throws Exception {
         String token = login("admin", "Admin123!");
 
-        mockMvc.perform(get("/api/products").header("Authorization", "Bearer " + token))
+        mockMvc.perform(get("/api/admin/products").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
     }
 
@@ -108,10 +108,10 @@ class AuthenticationIntegrationTest {
                 .expiration(new Date(System.currentTimeMillis() + 60_000))
                 .signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode("dGhpcy1pcy1hLWRpZmZlcmVudC0yNTYtYml0LXNlY3JldC1rZXk="))).compact();
 
-        mockMvc.perform(get("/api/products")).andExpect(status().isUnauthorized())
+        mockMvc.perform(get("/api/customer/products")).andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
         for (String bad : new String[]{"garbage", tampered, expired, signedWithOtherKey}) {
-            mockMvc.perform(get("/api/products").header("Authorization", "Bearer " + bad))
+            mockMvc.perform(get("/api/customer/products").header("Authorization", "Bearer " + bad))
                     .andExpect(status().isUnauthorized())
                     .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
         }
@@ -123,7 +123,7 @@ class AuthenticationIntegrationTest {
         User ghost = User.builder().username("ghost").password("x").role(Role.CUSTOMER).build();
         String token = jwtService.generateToken(com.alqaseh.ecommerce.infrastructure.security.UserPrincipal.create(ghost));
 
-        mockMvc.perform(get("/api/products").header("Authorization", "Bearer " + token))
+        mockMvc.perform(get("/api/customer/products").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
     }
 

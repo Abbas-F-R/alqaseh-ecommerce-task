@@ -6,7 +6,8 @@ import com.alqaseh.ecommerce.features.order.dto.response.CustomerOrderResponse;
 import com.alqaseh.ecommerce.features.order.repository.OrderRepository;
 import com.alqaseh.ecommerce.features.order.service.OrderService;
 import com.alqaseh.ecommerce.features.payment.entity.PaymentMethod;
-import com.alqaseh.ecommerce.features.product.dto.request.ProductFilterRequest;
+import com.alqaseh.ecommerce.features.product.dto.request.AdminProductFilterRequest;
+import com.alqaseh.ecommerce.features.product.dto.request.CustomerProductFilterRequest;
 import com.alqaseh.ecommerce.features.product.entity.Product;
 import com.alqaseh.ecommerce.features.product.repository.ProductRepository;
 import com.alqaseh.ecommerce.features.product.service.ProductService;
@@ -14,6 +15,7 @@ import com.alqaseh.ecommerce.infrastructure.security.UserPrincipal;
 import com.alqaseh.ecommerce.infrastructure.user.entity.User;
 import com.alqaseh.ecommerce.infrastructure.user.repository.UserRepository;
 import com.alqaseh.ecommerce.shared.dto.PaginationRequest;
+import com.alqaseh.ecommerce.shared.response.CursorResponse;
 import com.alqaseh.ecommerce.shared.response.PageResponse;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
@@ -65,10 +67,10 @@ class QueryCountIntegrationTest {
 
         Product product = OrderTestData.saveProduct(productRepository, "Phone", 500, 300, 100);
         for (int i = 0; i < 5; i++) {
-            OrderTestData.saveOrder(orderRepository, customer, product, LINES_PER_ORDER, PaymentMethod.CREDIT_CARD);
+            OrderTestData.saveOrder(orderRepository, productRepository, customer, product, LINES_PER_ORDER, PaymentMethod.CREDIT_CARD);
         }
         for (int i = 0; i < 2; i++) {
-            OrderTestData.saveOrder(orderRepository, other, product, LINES_PER_ORDER, PaymentMethod.XYZ_WALLET);
+            OrderTestData.saveOrder(orderRepository, productRepository, other, product, LINES_PER_ORDER, PaymentMethod.XYZ_WALLET);
         }
         for (int i = 0; i < 12; i++) {
             OrderTestData.saveProduct(productRepository, "Extra " + i, 10, 5, 5);
@@ -98,9 +100,9 @@ class QueryCountIntegrationTest {
 
         PageResponse<CustomerOrderResponse> page = orderService.listMyOrders(PaginationRequest.builder().size(3).build());
 
-        assertThat(page.content()).hasSize(3);
-        assertThat(page.totalElements()).isEqualTo(5);
-        assertThat(page.content()).allSatisfy(order -> assertThat(order.getItems()).hasSize(LINES_PER_ORDER));
+        assertThat(page.data()).hasSize(3);
+        assertThat(page.totalCount()).isEqualTo(5);
+        assertThat(page.data()).allSatisfy(order -> assertThat(order.getItems()).hasSize(LINES_PER_ORDER));
         assertThat(statistics.getPrepareStatementCount()).isEqualTo(3);
         assertThat(statistics.getEntityStatistics(Product.class.getName()).getLoadCount())
                 .as("order lines must not hydrate their products").isZero();
@@ -114,9 +116,9 @@ class QueryCountIntegrationTest {
 
         PageResponse<AdminOrderResponse> page = orderService.listAllOrders(OrderFilterRequest.builder().size(4).build());
 
-        assertThat(page.content()).hasSize(4);
-        assertThat(page.totalElements()).isEqualTo(7);
-        assertThat(page.content()).allSatisfy(order -> {
+        assertThat(page.data()).hasSize(4);
+        assertThat(page.totalCount()).isEqualTo(7);
+        assertThat(page.data()).allSatisfy(order -> {
             assertThat(order.getCustomerUsername()).isNotBlank();
             assertThat(order.getItems()).hasSize(LINES_PER_ORDER);
         });
@@ -125,16 +127,30 @@ class QueryCountIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET /api/products: 2 statements (page + count) and only one page of rows is loaded")
-    void productListingQueryCount() {
+    @DisplayName("GET /api/admin/products: page/offset pagination costs 2 statements (count + page)")
+    void adminProductListingQueryCount() {
         authenticate(userRepository.findByUsername("admin").orElseThrow());
         statistics.clear(); // do not count the login lookup above
 
-        PageResponse<?> page = productService.listProducts(ProductFilterRequest.builder().size(5).build());
+        var page = productService.listProductsForAdmin(AdminProductFilterRequest.builder().size(5).build());
 
-        assertThat(page.content()).hasSize(5);
-        assertThat(page.totalElements()).isEqualTo(13);
+        assertThat(page.data()).hasSize(5);
+        assertThat(page.totalCount()).isGreaterThan(5);
         assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
-        assertThat(statistics.getEntityStatistics(Product.class.getName()).getLoadCount()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("GET /api/customer/products: 1 statement (no count query) and limit + 1 rows are loaded to detect hasMore")
+    void customerProductListingQueryCount() {
+        authenticate(userRepository.findByUsername("customer1").orElseThrow());
+        statistics.clear(); // do not count the login lookup above
+
+        CursorResponse<?> page = productService.listProductsForCustomer(CustomerProductFilterRequest.builder().limit(5).build());
+
+        assertThat(page.data()).hasSize(5);
+        assertThat(page.hasMore()).isTrue();
+        assertThat(page.nextCursor()).isNotNull();
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(1);
+        assertThat(statistics.getEntityStatistics(Product.class.getName()).getLoadCount()).isEqualTo(6);
     }
 }

@@ -52,9 +52,9 @@ class OrderVisibilityIntegrationTest {
         User customer2 = userRepository.findByUsername("customer2").orElseThrow();
         Product product = OrderTestData.saveProduct(productRepository, "Monitor", 200, 120, 50);
 
-        OrderTestData.saveOrder(orderRepository, customer1, product, 1, PaymentMethod.CREDIT_CARD);
-        OrderTestData.saveOrder(orderRepository, customer1, product, 2, PaymentMethod.XYZ_WALLET);
-        OrderTestData.saveOrder(orderRepository, customer2, product, 3, PaymentMethod.CREDIT_CARD);
+        OrderTestData.saveOrder(orderRepository, productRepository, customer1, product, 1, PaymentMethod.CREDIT_CARD);
+        OrderTestData.saveOrder(orderRepository, productRepository, customer1, product, 2, PaymentMethod.XYZ_WALLET);
+        OrderTestData.saveOrder(orderRepository, productRepository, customer2, product, 3, PaymentMethod.CREDIT_CARD);
         entityManager.flush();
         entityManager.clear(); // read back from the database, like a real request would
     }
@@ -65,12 +65,12 @@ class OrderVisibilityIntegrationTest {
     void customerSeesOnlyOwnOrders() throws Exception {
         mockMvc.perform(get("/api/orders/my"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements", is(2)))
-                .andExpect(jsonPath("$.data.content", hasSize(2)))
-                .andExpect(jsonPath("$.data.content[*].profit", everyItem(nullValue())))
-                .andExpect(jsonPath("$.data.content[*].totalCost", everyItem(nullValue())))
-                .andExpect(jsonPath("$.data.content[*].customerId", everyItem(nullValue())))
-                .andExpect(jsonPath("$.data.content[0].items[0].unitCost").doesNotExist());
+                .andExpect(jsonPath("$.totalCount", is(2)))
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.data[*].profit", everyItem(nullValue())))
+                .andExpect(jsonPath("$.data[*].totalCost", everyItem(nullValue())))
+                .andExpect(jsonPath("$.data[*].customerId", everyItem(nullValue())))
+                .andExpect(jsonPath("$.data[0].items[0].unitCost").doesNotExist());
     }
 
     @Test
@@ -78,8 +78,8 @@ class OrderVisibilityIntegrationTest {
     @DisplayName("Another customer does not see them")
     void otherCustomerSeesOnlyTheirs() throws Exception {
         mockMvc.perform(get("/api/orders/my"))
-                .andExpect(jsonPath("$.data.totalElements", is(1)))
-                .andExpect(jsonPath("$.data.content[0].totalPrice", is(600.0)));
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.data[0].totalPrice", is(600.0)));
     }
 
     @Test
@@ -87,14 +87,14 @@ class OrderVisibilityIntegrationTest {
     @DisplayName("My orders are paginated in the database: page size and total are honoured, newest first")
     void myOrdersPagination() throws Exception {
         mockMvc.perform(get("/api/orders/my").param("size", "1").param("page", "0"))
-                .andExpect(jsonPath("$.data.content", hasSize(1)))
-                .andExpect(jsonPath("$.data.totalElements", is(2)))
-                .andExpect(jsonPath("$.data.totalPages", is(2)))
-                .andExpect(jsonPath("$.data.hasNext", is(true)))
-                .andExpect(jsonPath("$.data.content[0].paymentMethod", is("XyzWallet")));
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.totalCount", is(2)))
+                .andExpect(jsonPath("$.pagesCount", is(2)))
+                .andExpect(jsonPath("$.isLast", is(false)))
+                .andExpect(jsonPath("$.data[0].paymentMethod", is("XyzWallet")));
         mockMvc.perform(get("/api/orders/my").param("size", "1").param("page", "1"))
-                .andExpect(jsonPath("$.data.content[0].paymentMethod", is("CreditCard")))
-                .andExpect(jsonPath("$.data.hasNext", is(false)));
+                .andExpect(jsonPath("$.data[0].paymentMethod", is("CreditCard")))
+                .andExpect(jsonPath("$.isLast", is(true)));
     }
 
     @Test
@@ -103,10 +103,10 @@ class OrderVisibilityIntegrationTest {
     void adminSeesEverything() throws Exception {
         mockMvc.perform(get("/api/orders"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements", is(3)))
-                .andExpect(jsonPath("$.data.content[0].customerUsername", is("customer2")))
-                .andExpect(jsonPath("$.data.content[0].profit", is(240.0)))   // 600 - 360
-                .andExpect(jsonPath("$.data.content[0].totalCost", is(360.0)));
+                .andExpect(jsonPath("$.totalCount", is(3)))
+                .andExpect(jsonPath("$.data[0].customerUsername", is("customer2")))
+                .andExpect(jsonPath("$.data[0].profit", is(240.0)))   // 600 - 360
+                .andExpect(jsonPath("$.data[0].totalCost", is(360.0)));
     }
 
     @Test
@@ -114,12 +114,12 @@ class OrderVisibilityIntegrationTest {
     @DisplayName("Admin filters by payment method and by customer, in the database")
     void adminFilters() throws Exception {
         mockMvc.perform(get("/api/orders").param("paymentMethod", "CREDIT_CARD"))
-                .andExpect(jsonPath("$.data.totalElements", is(2)));
+                .andExpect(jsonPath("$.totalCount", is(2)));
         mockMvc.perform(get("/api/orders").param("customer", "CUSTOMER2"))
-                .andExpect(jsonPath("$.data.totalElements", is(1)));
+                .andExpect(jsonPath("$.totalCount", is(1)));
         mockMvc.perform(get("/api/orders").param("customer", "customer1").param("paymentMethod", "XYZ_WALLET"))
-                .andExpect(jsonPath("$.data.totalElements", is(1)))
-                .andExpect(jsonPath("$.data.content[0].customerUsername", is("customer1")));
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.data[0].customerUsername", is("customer1")));
     }
 
     @Test

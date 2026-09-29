@@ -71,12 +71,12 @@ class EnumInputCaseIntegrationTest {
                 com.alqaseh.ecommerce.features.product.entity.ProductCategory.FURNITURE)
                 .price(phone.getPrice()).cost(phone.getCost()).availableQuantity(1).build());
 
-        mockMvc.perform(get("/api/products").param("category", category))
+        mockMvc.perform(get("/api/customer/products").param("category", category))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content", hasSize(1)))
-                .andExpect(jsonPath("$.data.content[0].name", is("Phone")))
-                .andExpect(jsonPath("$.data.content[0].category", is("electronics")))
-                .andExpect(jsonPath("$.data.content[0].stockStatus", is("low")));
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].name", is("Phone")))
+                .andExpect(jsonPath("$.data[0].category", is("electronics")))
+                .andExpect(jsonPath("$.data[0].stockStatus", is("low")));
     }
 
     @ParameterizedTest
@@ -86,13 +86,13 @@ class EnumInputCaseIntegrationTest {
     void paymentMethodInQuery(String method) throws Exception {
         Product product = OrderTestData.saveProduct(productRepository, "Monitor", 200, 120, 50);
         var customer = userRepository.findByUsername("customer1").orElseThrow();
-        OrderTestData.saveOrder(orderRepository, customer, product, 1, PaymentMethod.CREDIT_CARD);
-        OrderTestData.saveOrder(orderRepository, customer, product, 1, PaymentMethod.XYZ_WALLET);
+        OrderTestData.saveOrder(orderRepository, productRepository, customer, product, 1, PaymentMethod.CREDIT_CARD);
+        OrderTestData.saveOrder(orderRepository, productRepository, customer, product, 1, PaymentMethod.XYZ_WALLET);
 
         mockMvc.perform(get("/api/orders").param("paymentMethod", method))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements", is(1)))
-                .andExpect(jsonPath("$.data.content[0].paymentMethod", is("CreditCard")));
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.data[0].paymentMethod", is("CreditCard")));
     }
 
     @Test
@@ -115,7 +115,7 @@ class EnumInputCaseIntegrationTest {
                         {"name":"X","category":"toys","price":1,"cost":1,"availableQuantity":1}"""))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code", is("BAD_REQUEST")));
-        mockMvc.perform(get("/api/products").param("category", "toys"))
+        mockMvc.perform(get("/api/admin/products").param("category", "toys"))
                 .andExpect(status().isBadRequest());
     }
 }

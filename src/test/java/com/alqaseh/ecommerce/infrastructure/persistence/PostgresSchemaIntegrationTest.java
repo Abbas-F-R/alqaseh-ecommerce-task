@@ -102,9 +102,9 @@ class PostgresSchemaIntegrationTest {
     void cleanUp() {
         jdbc.update("DELETE FROM order_items");
         jdbc.update("DELETE FROM orders");
-        jdbc.update("DELETE FROM users WHERE username LIKE 'ck%'");
         productRepository.deleteAll();
         discountCodeRepository.deleteAll();
+        jdbc.update("DELETE FROM users WHERE username LIKE 'ck%'");
     }
 
     private static Product product(String name) {
@@ -116,7 +116,7 @@ class PostgresSchemaIntegrationTest {
     @DisplayName("All migrations apply and the schema they produce satisfies Hibernate's validation")
     void migrationsApplyAndSchemaMatchesEntities() {
         assertThat(flyway.info().pending()).isEmpty();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("4");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("5");
     }
 
     @Test
@@ -133,6 +133,7 @@ class PostgresSchemaIntegrationTest {
                 "idx_orders_customer_created",
                 "idx_orders_payment_created",
                 "idx_products_category",
+                "idx_products_category_id",
                 "uq_discount_codes_code",
                 "uq_order_items_order_product",
                 "uq_orders_discount_code",
