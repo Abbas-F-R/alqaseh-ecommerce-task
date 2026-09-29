@@ -30,7 +30,10 @@ public class UnitOfWork(DapperContext context) : IUnitOfWork
         try
         {
             await connection.ExecuteAsync(
-                "EXEC sys.sp_set_session_context @key = N'UserId', @value = @UserId", new { UserId = userId }, transaction);
+                "SetSessionUserId",
+                new { UserId = userId },
+                transaction,
+                commandType: CommandType.StoredProcedure);
 
             var result = await work(transaction);
 

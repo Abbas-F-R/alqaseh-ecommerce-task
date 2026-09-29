@@ -1,3 +1,5 @@
+using System.Data;
+using AlQaseh_Ecommerce_API.Features.Auth.Dtos;
 using AlQaseh_Ecommerce_API.Shared.Constants;
 using AlQaseh_Ecommerce_API.Shared.Utils;
 using Dapper;
@@ -41,22 +43,26 @@ public sealed class DatabaseSeeder(DapperContext context, TimeProvider clock, IL
         foreach (var user in Users)
         {
             await connection.ExecuteAsync(new CommandDefinition(
-                @"IF NOT EXISTS (SELECT 1 FROM Users WHERE UserName = @UserName)
-                    INSERT INTO Users (FullName, UserName, PasswordHash, Role) VALUES (@FullName, @UserName, @Hash, @Role)",
-                new { user.UserName, user.FullName, Hash = PasswordHasher.Hash(user.Password), user.Role },
+                "SeedUserIfNotExists",
+                new { user.FullName, user.UserName, PasswordHash = PasswordHasher.Hash(user.Password), user.Role },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
         }
 
-        var adminId = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            "SELECT Id FROM Users WHERE UserName = 'admin'", cancellationToken: cancellationToken));
+        var adminUser = await connection.QueryFirstOrDefaultAsync<UserDto>(new CommandDefinition(
+            "UsersGetByUserName",
+            new { UserName = "admin" },
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken));
+
+        var adminId = adminUser!.Id;
 
         foreach (var product in Products)
         {
             await connection.ExecuteAsync(new CommandDefinition(
-                @"IF NOT EXISTS (SELECT 1 FROM Products WHERE Name = @Name)
-                    INSERT INTO Products (Name, Category, Price, Cost, AvailableQuantity, CreatedBy)
-                    VALUES (@Name, @Category, @Price, @Cost, @Quantity, @AdminId)",
-                new { product.Name, product.Category, product.Price, product.Cost, product.Quantity, AdminId = adminId },
+                "SeedProductIfNotExists",
+                new { product.Name, product.Category, product.Price, product.Cost, AvailableQuantity = product.Quantity, AdminId = adminId },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
         }
 
@@ -72,10 +78,9 @@ public sealed class DatabaseSeeder(DapperContext context, TimeProvider clock, IL
         foreach (var discount in discounts)
         {
             await connection.ExecuteAsync(new CommandDefinition(
-                @"IF NOT EXISTS (SELECT 1 FROM DiscountCodes WHERE Code = @Code)
-                    INSERT INTO DiscountCodes (Code, Amount, MinimumOrderTotal, ExpiresAt, Used)
-                    VALUES (@Code, @Amount, @MinimumOrderTotal, @ExpiresAt, @Used)",
+                "SeedDiscountCodeIfNotExists",
                 new { discount.Code, discount.Amount, discount.MinimumOrderTotal, discount.ExpiresAt, discount.Used },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
         }
 

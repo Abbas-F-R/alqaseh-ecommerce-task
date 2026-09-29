@@ -13,36 +13,31 @@ public class OrderRepository(DapperContext context) : IOrderRepository
 {
     public Task<InsertedOrder> InsertOrder(NewOrder order, IDbTransaction transaction) =>
         transaction.Connection!.QuerySingleAsync<InsertedOrder>(
-            @"DECLARE @inserted TABLE (Id BIGINT, CreatedAt DATETIME2(3));
-
-              INSERT INTO Orders (CustomerId, SubtotalAmount, DiscountAmount, TotalAmount, TotalCost, DiscountCodeId, PaymentMethod)
-              OUTPUT inserted.Id, inserted.CreatedAt INTO @inserted
-              VALUES (@CustomerId, @Subtotal, @Discount, @Total, @TotalCost, @DiscountCodeId, @PaymentMethod);
-
-              SELECT Id, CreatedAt FROM @inserted;",
+            "OrdersInsert",
             order,
-            transaction);
+            transaction,
+            commandType: CommandType.StoredProcedure);
 
     public Task InsertItems(long orderId, IEnumerable<NewOrderItem> items, IDbTransaction transaction) =>
         transaction.Connection!.ExecuteAsync(
-            @"INSERT INTO OrderItems (OrderId, ProductId, ProductName, UnitPrice, UnitCost, Quantity)
-              VALUES (@OrderId, @ProductId, @ProductName, @UnitPrice, @UnitCost, @Quantity)",
+            "OrderItemsInsert",
             items.Select(i => new { OrderId = orderId, i.ProductId, i.ProductName, i.UnitPrice, i.UnitCost, i.Quantity }),
-            transaction);
+            transaction,
+            commandType: CommandType.StoredProcedure);
 
     public async Task<(List<CustomerOrderResponse> Data, int TotalCount)> GetMyOrders(long customerId, BaseFilter paging)
     {
         await using var connection = context.CreateConnection();
 
         await using var multi = await connection.QueryMultipleAsync(
-            @"SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId;
-
-              SELECT Id, TotalAmount AS TotalPrice, PaymentMethod, CreatedAt AS PurchaseDate, DiscountAmount
-              FROM Orders
-              WHERE CustomerId = @CustomerId
-              ORDER BY CreatedAt DESC, Id DESC
-              OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;",
-            new { CustomerId = customerId, Offset = (paging.PageNumber - 1) * paging.PageSize, paging.PageSize });
+            "OrdersGetByCustomer",
+            new
+            {
+                CustomerId = customerId,
+                paging.PageNumber,
+                paging.PageSize
+            },
+            commandType: CommandType.StoredProcedure);
 
         var totalCount = await multi.ReadFirstAsync<int>();
         var orders = (await multi.ReadAsync<CustomerOrderResponse>()).ToList();
@@ -58,48 +53,19 @@ public class OrderRepository(DapperContext context) : IOrderRepository
     {
         await using var connection = context.CreateConnection();
 
-        var conditions = new List<string>();
-        var parameters = new DynamicParameters();
-
-        if (!string.IsNullOrWhiteSpace(filter.Customer))
-        {
-            conditions.Add(@"u.UserName LIKE @Customer ESCAPE '\'");
-            parameters.Add("Customer", "%" + EscapeLike(filter.Customer.Trim()) + "%");
-        }
-
-        if (filter.CustomerId.HasValue)
-        {
-            conditions.Add("o.CustomerId = @CustomerId");
-            parameters.Add("CustomerId", filter.CustomerId.Value);
-        }
-
-        if (PaymentMethods.Normalize(filter.PaymentMethod) is { } paymentMethod)
-        {
-            conditions.Add("o.PaymentMethod = @PaymentMethod");
-            parameters.Add("PaymentMethod", paymentMethod);
-        }
-
-        parameters.Add("Offset", (filter.PageNumber - 1) * filter.PageSize);
-        parameters.Add("PageSize", filter.PageSize);
-
-        var where = conditions.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", conditions);
+        var paymentMethod = PaymentMethods.Normalize(filter.PaymentMethod);
 
         await using var multi = await connection.QueryMultipleAsync(
-            $@"SELECT COUNT(*)
-               FROM Orders o
-               INNER JOIN Users u ON u.Id = o.CustomerId
-               {where};
-
-               SELECT o.Id, o.CustomerId, u.UserName AS CustomerUsername,
-                      o.SubtotalAmount, o.DiscountAmount, o.TotalAmount, o.TotalCost,
-                      o.TotalAmount - o.TotalCost AS Profit,
-                      o.PaymentMethod, o.CreatedAt AS PurchaseDate
-               FROM Orders o
-               INNER JOIN Users u ON u.Id = o.CustomerId
-               {where}
-               ORDER BY o.CreatedAt DESC, o.Id DESC
-               OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;",
-            parameters);
+            "OrdersGetAll",
+            new
+            {
+                Customer = string.IsNullOrWhiteSpace(filter.Customer) ? null : SqlLike.Escape(filter.Customer.Trim()),
+                filter.CustomerId,
+                PaymentMethod = paymentMethod,
+                filter.PageNumber,
+                filter.PageSize
+            },
+            commandType: CommandType.StoredProcedure);
 
         var totalCount = await multi.ReadFirstAsync<int>();
         var orders = (await multi.ReadAsync<AdminOrderResponse>()).ToList();
@@ -119,11 +85,9 @@ public class OrderRepository(DapperContext context) : IOrderRepository
             return [];
 
         var rows = await connection.QueryAsync<OrderItemRow>(
-            @"SELECT OrderId, ProductId, ProductName, UnitPrice, Quantity, UnitPrice * Quantity AS Subtotal
-              FROM OrderItems
-              WHERE OrderId IN @OrderIds
-              ORDER BY Id",
-            new { OrderIds = ids });
+            "OrderItemsGetByOrderIds",
+            new { OrderIdsCsv = string.Join(",", ids) },
+            commandType: CommandType.StoredProcedure);
 
         return rows.GroupBy(r => r.OrderId).ToDictionary(
             g => g.Key,
@@ -136,9 +100,6 @@ public class OrderRepository(DapperContext context) : IOrderRepository
                 Subtotal = r.Subtotal
             }).ToList());
     }
-
-    private static string EscapeLike(string value) =>
-        value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[");
 
     private sealed class OrderItemRow
     {

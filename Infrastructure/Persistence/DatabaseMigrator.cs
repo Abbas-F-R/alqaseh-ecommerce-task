@@ -36,6 +36,20 @@ public sealed partial class DatabaseMigrator(DapperContext context, ILogger<Data
         var applied = (await connection.QueryAsync<string>(new CommandDefinition("SELECT Version FROM SchemaMigrations", cancellationToken: cancellationToken)))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // Self-healing: if V002 was marked as applied in an earlier run, verify that its views and procedures
+        // (such as SeedUserIfNotExists and vw_Products) actually exist. If missing, schedule V002 for re-application.
+        if (applied.Contains("V002__Procedures.sql"))
+        {
+            var v002ObjectsExist = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+                "SELECT CASE WHEN OBJECT_ID(N'SeedUserIfNotExists', N'P') IS NOT NULL AND OBJECT_ID(N'vw_Products', N'V') IS NOT NULL THEN 1 ELSE 0 END",
+                cancellationToken: cancellationToken));
+            if (v002ObjectsExist == 0)
+            {
+                logger.LogWarning("[Migrations] V002__Procedures.sql was previously applied but key procedures/views are missing; scheduling re-application.");
+                applied.Remove("V002__Procedures.sql");
+            }
+        }
+
         foreach (var (version, script) in ReadScripts())
         {
             if (applied.Contains(version))
@@ -48,7 +62,10 @@ public sealed partial class DatabaseMigrator(DapperContext context, ILogger<Data
                 await connection.ExecuteAsync(new CommandDefinition(batch, transaction: transaction, cancellationToken: cancellationToken));
 
             await connection.ExecuteAsync(new CommandDefinition(
-                "INSERT INTO SchemaMigrations (Version) VALUES (@Version)", new { Version = version }, transaction, cancellationToken: cancellationToken));
+                "IF NOT EXISTS (SELECT 1 FROM SchemaMigrations WHERE Version = @Version) " +
+                "INSERT INTO SchemaMigrations (Version) VALUES (@Version) " +
+                "ELSE UPDATE SchemaMigrations SET AppliedAt = SYSUTCDATETIME() WHERE Version = @Version;",
+                new { Version = version }, transaction, cancellationToken: cancellationToken));
             await transaction.CommitAsync(cancellationToken);
         }
     }

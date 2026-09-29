@@ -9,15 +9,19 @@ public class DiscountCodeRepository : IDiscountCodeRepository
 {
     public Task<DiscountCodeDto?> GetByCodeForUpdate(string code, IDbTransaction transaction) =>
         transaction.Connection!.QueryFirstOrDefaultAsync<DiscountCodeDto>(
-            @"SELECT Id, Code, Amount, MinimumOrderTotal, ExpiresAt, Used
-              FROM DiscountCodes WITH (UPDLOCK, ROWLOCK)
-              WHERE Code = @Code",
+            "DiscountCodesGetByCodeForUpdate",
             new { Code = code },
-            transaction);
+            transaction,
+            commandType: CommandType.StoredProcedure);
 
-    public async Task<bool> MarkAsUsed(long id, IDbTransaction transaction) =>
-        await transaction.Connection!.ExecuteAsync(
-            "UPDATE DiscountCodes SET Used = 1 WHERE Id = @Id AND Used = 0",
+    public async Task<bool> MarkAsUsed(long id, IDbTransaction transaction)
+    {
+        var rowsAffected = await transaction.Connection!.ExecuteScalarAsync<int>(
+            "DiscountCodesMarkAsUsed",
             new { Id = id },
-            transaction) > 0;
+            transaction,
+            commandType: CommandType.StoredProcedure);
+
+        return rowsAffected > 0;
+    }
 }
