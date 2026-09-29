@@ -1,0 +1,23 @@
+# Local development: works out of the box with `docker compose up -d` (see README).
+# The values below are throw-away defaults for a local machine only.
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:alqaseh_db}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:postgres}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:postgres}}
+  flyway:
+    # Demo products and discount codes are only loaded in dev.
+    locations: classpath:db/migration,classpath:db/dev
+
+application:
+  security:
+    jwt:
+      # Development: a random key per start (tokens stop working after a restart) unless JWT_SECRET is set. Nothing secret is stored in the repository.
+      secret-key: ${JWT_SECRET:${random.value}${random.value}}
+      expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  error:
+    include-debug-details: true
+
+logging:
+  level:
+    com.alqaseh.ecommerce: DEBUG
