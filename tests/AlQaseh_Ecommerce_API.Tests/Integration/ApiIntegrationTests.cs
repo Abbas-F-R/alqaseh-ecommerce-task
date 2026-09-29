@@ -89,9 +89,22 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
                      new { name = "A", category = "toys", price = 1, cost = 1, availableQuantity = 1 },
                      new { name = "A", category = "garden", price = 0, cost = 1, availableQuantity = 1 },
                      new { name = "A", category = "garden", price = 1, cost = -1, availableQuantity = 1 },
-                     new { name = "A", category = "garden", price = 1, cost = 1, availableQuantity = -1 }
+                     new { name = "A", category = "garden", price = 1, cost = 1, availableQuantity = -1 },
+                     new { name = "A", category = "garden", price = 100.005m, cost = 1, availableQuantity = 1 },  // would be rounded
+                     new { name = "A", category = "garden", price = 1e20m, cost = 1, availableQuantity = 1 }     // would overflow decimal(18,2)
                  })
             (await api.PostAsync("/api/products", admin, body)).Status.Should().Be(400);
+    }
+
+    [SqlServerFact]
+    public async Task CreateProduct_AcceptsTheLargestPrice_AndAnOrderOfItStillFits()
+    {
+        var product = await api.NewProductAsync(quantity: 10_000, price: 9_999_999_999.99m, cost: 9_999_999_999.99m);
+
+        var order = await api.PostAsync("/api/orders", await api.Customer1Token(), Order(product, 100, ApiFixture.Card()));
+
+        order.Status.Should().Be(201);
+        order.Json.GetProperty("totalPrice").GetDecimal().Should().Be(999_999_999_999m);
     }
 
     [SqlServerFact]

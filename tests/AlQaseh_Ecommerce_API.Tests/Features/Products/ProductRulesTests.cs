@@ -70,6 +70,20 @@ public class ProductRulesTests
         _form.Validate(new ProductForm { Name = name, Category = category, Price = price, Cost = cost, AvailableQuantity = quantity })
             .IsValid.Should().BeFalse();
 
+    [Theory]
+    [InlineData(100.5, true)]
+    [InlineData(9_999_999_999.99, true)]
+    [InlineData(100.005, false)]        // a third decimal would be rounded by the column
+    [InlineData(10_000_000_000, false)] // 11 digits before the decimal point
+    [InlineData(1e20, false)]           // used to overflow decimal(18,2): a 500
+    public void PriceAndCost_MustFitTheMoneyColumns(double amount, bool valid)
+    {
+        var money = (decimal)amount;
+
+        _form.Validate(new ProductForm { Name = "Chair", Category = "furniture", Price = money, Cost = 1, AvailableQuantity = 5 }).IsValid.Should().Be(valid);
+        _form.Validate(new ProductForm { Name = "Chair", Category = "furniture", Price = 1, Cost = money, AvailableQuantity = 5 }).IsValid.Should().Be(valid);
+    }
+
     [Fact]
     public void OverlongName_Fails()
     {
