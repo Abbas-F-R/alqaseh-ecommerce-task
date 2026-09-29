@@ -15,6 +15,12 @@ public sealed partial class DatabaseMigrator(DapperContext context, ILogger<Data
     private const string ResourceMarker = ".Database.Migrations.";
     private const string LockResource = "AlQaseh_Ecommerce_API.Migrations";
 
+    /// <summary>
+    /// Collation of a database this class creates. Unique product names, user names and discount codes are case-insensitive
+    /// only because of a case-insensitive collation, so it is chosen here instead of inherited from the server.
+    /// </summary>
+    public const string DatabaseCollation = "Latin1_General_100_CI_AS";
+
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
         await EnsureDatabaseExistsAsync(cancellationToken);
@@ -99,7 +105,7 @@ public sealed partial class DatabaseMigrator(DapperContext context, ILogger<Data
         await using var master = new SqlConnection(builder.ConnectionString);
         await master.OpenAsync(cancellationToken);
         await master.ExecuteAsync(new CommandDefinition(
-            "IF DB_ID(@Name) IS NULL BEGIN DECLARE @sql NVARCHAR(MAX) = N'CREATE DATABASE ' + QUOTENAME(@Name); EXEC (@sql); END",
+            $"IF DB_ID(@Name) IS NULL BEGIN DECLARE @sql NVARCHAR(MAX) = N'CREATE DATABASE ' + QUOTENAME(@Name) + N' COLLATE {DatabaseCollation}'; EXEC (@sql); END",
             new { Name = database }, cancellationToken: cancellationToken));
     }
 

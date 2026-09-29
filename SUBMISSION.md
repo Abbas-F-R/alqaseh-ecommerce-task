@@ -170,7 +170,7 @@ What they cover: login and roles; product create/update/duplicate names (also un
 
 1. **Currency:** amounts are IQD, stored as `decimal(18,2)`; there is no currency field.
 2. **Enumerations:** categories (`furniture`, `electronics`, `beauty`, `garden`) and payment methods (`CreditCard`, `XyzWallet`) are accepted in any letter case, stored and returned in the canonical spelling.
-3. **Product names** are unique case-insensitively after trimming (enforced by a database unique constraint). A product update may keep its own name.
+3. **Product names** are unique case-insensitively after trimming (enforced by a database unique constraint; that relies on a case-insensitive collation, so the application creates its database with `Latin1_General_100_CI_AS`; when you supply your own database, use a case-insensitive collation). A product update may keep its own name.
 4. **Product values:** price > 0, cost ≥ 0, quantity ≥ 0; price and cost have at most 10 digits before and 2 after the decimal point (so a value is never rounded by the `decimal(18,2)` column and any order, at most 1,000,000 units in total, still fits it). Products are only created and updated (no delete was requested); an update replaces all fields (`PUT`).
 5. **Stock status:** exactly the bands of the assignment; a product with quantity 0 is still listed (`low`) and cannot be ordered (`409 InsufficientStock`).
 6. **Discount codes:** one fixed amount per code; the minimum is compared with the order's items total *before* the discount (equal qualifies); a code larger than the items total is rejected; a code is single-use across all customers; lookup is case-insensitive; expired means the current time is after `ExpiresAt`.

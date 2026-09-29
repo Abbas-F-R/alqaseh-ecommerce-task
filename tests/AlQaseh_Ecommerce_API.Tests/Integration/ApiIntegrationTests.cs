@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AlQaseh_Ecommerce_API.Infrastructure.Persistence;
 using FluentAssertions;
 using Xunit;
 
@@ -76,6 +77,14 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
 
         var duplicate = await api.PostAsync("/api/products", admin, new { name = "  " + name.ToUpperInvariant() + " ", category = "garden", price = 1, cost = 1, availableQuantity = 1 });
         (duplicate.Status, duplicate.Code).Should().Be((409, "ProductNameAlreadyExists"));
+    }
+
+    [SqlServerFact]
+    public async Task TheDatabaseCreatedByTheApplication_UsesTheCaseInsensitiveCollation_ThatUniqueNamesDependOn()
+    {
+        var collation = await api.QuerySqlAsync<string>("SELECT CAST(DATABASEPROPERTYEX(DB_NAME(), 'Collation') AS NVARCHAR(128))");
+
+        collation.Should().Be(DatabaseMigrator.DatabaseCollation);
     }
 
     [SqlServerFact]
