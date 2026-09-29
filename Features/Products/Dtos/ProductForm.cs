@@ -15,12 +15,12 @@ public class ProductForm
 
     /// <summary>Selling price in IQD; greater than 0.</summary>
     /// <example>75000</example>
-    public decimal Price { get; set; }
+    public required decimal Price { get; set; }
 
     /// <summary>Purchase cost in IQD; 0 or more.</summary>
     /// <example>50000</example>
-    public decimal Cost { get; set; }
+    public required decimal Cost { get; set; }
 
     /// <example>12</example>
-    public int AvailableQuantity { get; set; }
+    public required int AvailableQuantity { get; set; }
 }

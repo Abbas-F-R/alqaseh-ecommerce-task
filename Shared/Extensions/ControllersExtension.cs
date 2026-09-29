@@ -22,6 +22,8 @@ public static class ControllersExtension
                 // Encodes / decodes ids in request and response bodies.
                 options.JsonSerializerOptions.Converters.Add(new SqidJsonConverterFactory());
                 options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+                // The web defaults read "5" as the number 5; a number sent as text is a client bug.
+                options.JsonSerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.Strict;
             });
 
         return services;

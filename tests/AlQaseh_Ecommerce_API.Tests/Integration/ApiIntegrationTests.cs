@@ -156,7 +156,7 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
         var second = await api.NewProductAsync();
         var body = new { name = first.Name, category = "garden", price = 1, cost = 1, availableQuantity = 1 };
 
-        (await api.PutAsync("/api/products/zzzzzzzz", admin, body)).Code.Should().Be("ProductNotFound");
+        (await api.PutAsync($"/api/products/{AlQaseh_Ecommerce_API.Shared.Helper.SqidCodec.Encode(999_999_999L)}", admin, body)).Code.Should().Be("ProductNotFound");
         var clash = await api.PutAsync($"/api/products/{second.Id}", admin, body);
         (clash.Status, clash.Code).Should().Be((409, "ProductNameAlreadyExists"));
         (await api.PutAsync($"/api/products/{first.Id}", admin, body)).Status.Should().Be(200, "keeping the product's own name is fine");
@@ -362,7 +362,7 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
 
         var missing = await api.PostAsync("/api/orders", customer, new
         {
-            items = new[] { new { productId = plenty.Id, quantity = 1 }, new { productId = "zzzzzzzz", quantity = 1 } },
+            items = new[] { new { productId = plenty.Id, quantity = 1 }, new { productId = AlQaseh_Ecommerce_API.Shared.Helper.SqidCodec.Encode(999_999_999L), quantity = 1 } },
             payment = ApiFixture.Card()
         });
         (missing.Status, missing.Code).Should().Be((404, "ProductNotFound"));
@@ -410,7 +410,7 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
 
         redemptions.Count(o => o.Status == 201).Should().Be(1);
         redemptions.Count(o => o.Status == 409).Should().Be(7);
-        (await api.StockOf(stocked)).Should().Be(49, "the six losing orders gave their stock back");
+        (await api.StockOf(stocked)).Should().Be(49, "the seven losing orders gave their stock back");
     }
 
     [SqlServerFact]

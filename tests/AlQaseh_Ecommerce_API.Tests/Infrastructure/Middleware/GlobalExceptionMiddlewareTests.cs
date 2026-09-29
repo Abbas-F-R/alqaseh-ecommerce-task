@@ -57,6 +57,27 @@ public class GlobalExceptionMiddlewareTests
     }
 
     [Fact]
+    public async Task ARequestKestrelRefused_KeepsItsStatus_ItIsNotA500()
+    {
+        var (context, root) = await RunAsync(Environments.Production,
+            new BadHttpRequestException("Request body too large. The max request body size is 30000000 bytes.", StatusCodes.Status413PayloadTooLarge));
+
+        context.Response.StatusCode.Should().Be(413);
+        root.GetProperty("status").GetInt32().Should().Be(413);
+        root.GetRawText().Should().NotContain("30000000");
+    }
+
+    [Fact]
+    public async Task ABodyThatIsNotValidInItsDeclaredCharset_Is400_NotA500()
+    {
+        var (context, root) = await RunAsync(Environments.Production, new System.Text.DecoderFallbackException("Unable to translate bytes [7D]"));
+
+        context.Response.StatusCode.Should().Be(400);
+        root.GetProperty("status").GetInt32().Should().Be(400);
+        root.GetRawText().Should().NotContain("7D");
+    }
+
+    [Fact]
     public async Task WhenNothingFails_PassesThrough()
     {
         var context = new DefaultHttpContext();

@@ -24,10 +24,20 @@ public static class SqidCodec
 
         if (long.TryParse(value, out var plain)) return plain;
 
+        return DecodeCanonical(value);
+    }
+
+    /// <summary>
+    /// Decodes a Sqid only when it is exactly what <see cref="Encode"/> produces for the id it holds: Sqids also decodes aliases
+    /// (a case variant, a shorter string), and an alias must not resolve to a real row.
+    /// </summary>
+    public static long? DecodeCanonical(string? sqid)
+    {
+        if (string.IsNullOrEmpty(sqid)) return null;
         try
         {
-            var decoded = Encoder.Decode(value);
-            return decoded.Count > 0 ? decoded[0] : null;
+            var decoded = Encoder.Decode(sqid);
+            return decoded.Count == 1 && string.Equals(Encoder.Encode(decoded[0]), sqid, StringComparison.Ordinal) ? decoded[0] : null;
         }
         catch
         {

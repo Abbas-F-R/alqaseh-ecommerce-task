@@ -23,6 +23,23 @@ public class SqidCodecTests
     }
 
     [Theory]
+    [InlineData("abc")]
+    [InlineData("ABC")]
+    [InlineData("a")]
+    public void TryDecode_AnAliasThatSqidsWouldDecodeButNeverEncodes_IsRejected(string alias) => SqidCodec.TryDecode(alias).Should().BeNull();
+
+    [Fact]
+    public void TryDecode_ACaseVariantOfARealSqid_IsRejected()
+    {
+        var real = SqidCodec.Encode(123456);
+        var variant = real.ToUpperInvariant() == real ? real.ToLowerInvariant() : real.ToUpperInvariant();
+
+        SqidCodec.TryDecode(real).Should().Be(123456);
+        variant.Should().NotBe(real);
+        SqidCodec.TryDecode(variant).Should().BeNull();
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData(" ")]
     [InlineData(null)]

@@ -33,6 +33,7 @@ public class ApiInputValidationTests(ApiFixture api) : IClassFixture<ApiFixture>
                      new { method = "CreditCard", cardNumber = "4111" },
                      new { method = "CreditCard", cardNumber = new string('4', 20) },
                      new { method = "CreditCard", cardNumber = "abcd1111abcd1111" },
+                     new { method = "CreditCard", cardNumber = "\u0664\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661" },
                      new { method = "XyzWallet", phoneNumber = "12", walletPassword = "s" },
                      new { method = "XyzWallet", phoneNumber = "+9647800000000", walletPassword = new string('p', 129) },
                      new { method = "CreditCard", cardNumber = "4111111111111111", walletPassword = "secret" },
@@ -59,6 +60,46 @@ public class ApiInputValidationTests(ApiFixture api) : IClassFixture<ApiFixture>
         (await api.GetAsync("/api/orders/my?pageNumber=2147483647", customer)).Status.Should().Be(400);
         (await api.GetAsync("/api/customer/products?cursor=" + new string('A', 101), customer)).Status.Should().Be(400);
         (await api.GetAsync("/api/customer/products?name=" + new string('a', 151), customer)).Status.Should().Be(400);
+    }
+
+    [SqlServerFact]
+    public async Task Product_MissingOrTextNumbers_Is400_AndNothingIsStored()
+    {
+        var admin = await api.AdminToken();
+        var name = "M-" + Guid.NewGuid().ToString("N");
+
+        foreach (var body in new object[]
+                 {
+                     new { name, category = "garden", price = 10, availableQuantity = 1 },                    // cost missing
+                     new { name, category = "garden", price = 10, cost = 5 },                                 // quantity missing
+                     new { name, category = "garden", cost = 5, availableQuantity = 1 },                      // price missing
+                     new { name, category = "garden", price = 10, cost = 5, availableQuantity = "5" },        // a number sent as text
+                     new { name, category = "garden", price = "10", cost = 5, availableQuantity = 1 },
+                     new { name, category = "garden", price = 10, cost = 5, availableQuantity = 1.5 }         // a fraction is not truncated
+                 })
+            (await api.PostAsync("/api/products", admin, body)).Status.Should().Be(400);
+
+        (await api.QuerySqlAsync<int>("SELECT COUNT(*) FROM Products WHERE Name = @name", new { name })).Should().Be(0);
+    }
+
+    [SqlServerFact]
+    public async Task Ids_OnlyTheExactSqidIsAccepted_AnAliasOrANullLineIs400()
+    {
+        var product = await api.NewProductAsync(quantity: 5);
+        var admin = await api.AdminToken();
+        var customer = await api.Customer1Token();
+        var payment = new { method = "CreditCard", cardNumber = "4111111111111111" };
+
+        (await api.PostAsync("/api/orders", customer, new { items = new[] { new { productId = "abc", quantity = 1 } }, payment })).Status.Should().Be(400);
+        (await api.PostAsync("/api/orders", customer, new { items = new object?[] { null }, payment })).Status.Should().Be(400);
+
+        var alias = product.Id.ToUpperInvariant() == product.Id ? product.Id.ToLowerInvariant() : product.Id.ToUpperInvariant();
+        alias.Should().NotBe(product.Id);
+        (await api.PutAsync($"/api/products/{alias}", admin, new { name = product.Name, category = "garden", price = 5, cost = 1, availableQuantity = 1 })).Status.Should().Be(400);
+        (await api.PostAsync("/api/orders", customer, new { items = new[] { new { productId = alias, quantity = 1 } }, payment })).Status.Should().Be(400);
+        (await api.GetAsync("/api/orders?customerId=abc", admin)).Status.Should().Be(400);
+
+        (await api.StockOf(product)).Should().Be(5);
     }
 
     [SqlServerFact]

@@ -15,7 +15,7 @@ public class CreateOrderRequestValidator : AbstractValidator<CreateOrderRequest>
             .NotEmpty().WithMessage("An order must contain at least one item.")
             .Must(items => items is null || items.Count <= MaxItems).WithMessage($"An order cannot contain more than {MaxItems} items.");
 
-        RuleForEach(x => x.Items).ChildRules(item =>
+        RuleForEach(x => x.Items).Cascade(CascadeMode.Stop).NotNull().WithMessage("An order line cannot be null.").ChildRules(item =>
         {
             item.RuleFor(i => i.ProductId).GreaterThan(0).WithMessage("Product id is required.");
             item.RuleFor(i => i.Quantity).InclusiveBetween(1, MaxQuantity).WithMessage($"Quantity must be between 1 and {MaxQuantity}.");
@@ -37,7 +37,7 @@ public class CreateOrderRequestValidator : AbstractValidator<CreateOrderRequest>
             {
                 RuleFor(x => x.Payment.CardNumber)
                     .NotEmpty().WithMessage("Card number is required for CreditCard.")
-                    .Matches(@"^\d{12,19}\z").WithMessage("Card number must be 12 to 19 digits."); // \z, not $: "$" would accept a trailing newline
+                    .Matches(@"^[0-9]{12,19}\z").WithMessage("Card number must be 12 to 19 digits."); // [0-9], not \d (which matches every Unicode digit); \z, not $ (which accepts a trailing newline)
 
                 // Only the fields of the chosen method are accepted: wallet data with a card payment is a client bug.
                 RuleFor(x => x.Payment.PhoneNumber)
@@ -50,7 +50,7 @@ public class CreateOrderRequestValidator : AbstractValidator<CreateOrderRequest>
             {
                 RuleFor(x => x.Payment.PhoneNumber)
                     .NotEmpty().WithMessage("Phone number is required for XyzWallet.")
-                    .Matches(@"^\+?\d{8,15}\z").WithMessage("Phone number must be 8 to 15 digits with an optional leading +.");
+                    .Matches(@"^\+?[0-9]{8,15}\z").WithMessage("Phone number must be 8 to 15 digits with an optional leading +.");
 
                 RuleFor(x => x.Payment.WalletPassword)
                     .NotEmpty().WithMessage("Wallet password is required for XyzWallet.")

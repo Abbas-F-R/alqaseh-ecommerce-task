@@ -108,7 +108,7 @@ CREATE INDEX IX_OrderItems_ProductId ON OrderItems (ProductId);
 GO
 
 -- Audit trail, written by database triggers (see V002 / V003), not by the application. Not exposed through the API.
--- Same design as the Official Correspondence System: AuditTables registers the audited tables, AuditLog holds one row per changed record.
+-- Audit design: AuditTables registers the audited tables, AuditLog holds one row per changed record.
 CREATE TABLE AuditTables (
     TableId   INT          NOT NULL,
     TableName VARCHAR(128) NOT NULL,

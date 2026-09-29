@@ -32,7 +32,12 @@ public class PaymentFieldsValidatorTests
     [InlineData("abcd1111abcd1111")]
     [InlineData("4111-1111-1111-1111")]
     [InlineData("4111111111111111\n")]
+    [InlineData("\u0664\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661")] // Arabic-Indic digits
+    [InlineData("\uFF14\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11")] // full-width digits
     public void CardNumberMissingTooShortTooLongOrNotDigits_IsRejected(string? number) => Card(number).Should().BeFalse();
+
+    [Fact]
+    public void Wallet_PhoneWithNonAsciiDigits_IsRejected() => Wallet("+\u0669\u0664\u0667\u0668\u0660\u0660\u0660\u0660\u0660\u0660\u0660\u0660", "secret").Should().BeFalse();
 
     [Fact]
     public void GiganticCardNumber_IsRejectedNotProcessed() => Card(new string('4', 1_000_000)).Should().BeFalse();

@@ -1,7 +1,6 @@
 ﻿using AlQaseh_Ecommerce_API.Shared.Attributes;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
-using Sqids;
 
 namespace AlQaseh_Ecommerce_API.Shared.Helper;
 
@@ -10,7 +9,6 @@ namespace AlQaseh_Ecommerce_API.Shared.Helper;
 /// </summary>
 public class SqidModelBinder : IModelBinder
 {
-    private static readonly SqidsEncoder<long> Encoder = new(new SqidsOptions { MinLength = 8 });
 
     public Task BindModelAsync(ModelBindingContext bindingContext)
     {
@@ -37,10 +35,10 @@ public class SqidModelBinder : IModelBinder
 
         try
         {
-            var result = Encoder.Decode(value);
-            if (result.Count > 0)
+            var result = SqidCodec.DecodeCanonical(value);
+            if (result is not null)
             {
-                bindingContext.Result = ModelBindingResult.Success(result[0]);
+                bindingContext.Result = ModelBindingResult.Success(result.Value);
             }
             else
             {

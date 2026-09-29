@@ -51,7 +51,7 @@ public class ProductControllerTests
         var product = new AdminProductResponse { Id = 3, Name = "Chair", Category = "furniture", CreatedBy = 1 };
         _service.Setup(s => s.Add(It.IsAny<ServiceRequest<ProductForm>>())).ReturnsAsync(ServiceResult<AdminProductResponse>.Ok(product));
 
-        var result = await Controller("Admin").CreateProduct(new ProductForm { Name = "Chair" });
+        var result = await Controller("Admin").CreateProduct(new ProductForm { Name = "Chair", Price = 10, Cost = 5, AvailableQuantity = 1 });
 
         var created = result.Result.Should().BeAssignableTo<ObjectResult>().Subject;
         created.StatusCode.Should().Be(201);
@@ -64,7 +64,7 @@ public class ProductControllerTests
         _service.Setup(s => s.Add(It.IsAny<ServiceRequest<ProductForm>>()))
             .ReturnsAsync(ServiceResult<AdminProductResponse>.Failure(Messages.ProductNameAlreadyExists));
 
-        var result = await Controller("Admin").CreateProduct(new ProductForm());
+        var result = await Controller("Admin").CreateProduct(new ProductForm { Price = 10, Cost = 5, AvailableQuantity = 1 });
 
         var (status, code, _) = result.Result!.Problem();
         (status, code).Should().Be((409, "ProductNameAlreadyExists"));
@@ -76,7 +76,7 @@ public class ProductControllerTests
         _service.Setup(s => s.Update(7, It.IsAny<ServiceRequest<ProductForm>>()))
             .ReturnsAsync(ServiceResult<AdminProductResponse>.Failure(Messages.ProductNotFound));
 
-        var result = await new ProductController(_service.Object).WithUser(1, "admin", "Admin", "ar").UpdateProduct(7, new ProductForm());
+        var result = await new ProductController(_service.Object).WithUser(1, "admin", "Admin", "ar").UpdateProduct(7, new ProductForm { Price = 10, Cost = 5, AvailableQuantity = 1 });
 
         var (status, code, detail) = result.Result!.Problem();
         (status, code).Should().Be((404, "ProductNotFound"));
@@ -89,7 +89,7 @@ public class ProductControllerTests
         _service.Setup(s => s.Update(7, It.IsAny<ServiceRequest<ProductForm>>()))
             .ReturnsAsync(ServiceResult<AdminProductResponse>.Ok(new AdminProductResponse { Id = 7 }));
 
-        var result = await Controller("Admin").UpdateProduct(7, new ProductForm());
+        var result = await Controller("Admin").UpdateProduct(7, new ProductForm { Price = 10, Cost = 5, AvailableQuantity = 1 });
 
         result.Result.Should().BeOfType<OkObjectResult>();
         _service.Verify(s => s.Update(7, It.Is<ServiceRequest<ProductForm>>(r => r.UserId == 1 && r.Role == "Admin")), Times.Once);

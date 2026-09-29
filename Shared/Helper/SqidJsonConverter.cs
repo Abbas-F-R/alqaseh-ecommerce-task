@@ -39,8 +39,7 @@ public class SqidJsonConverter : JsonConverter<long>
         var sqid = reader.GetString();
         if (string.IsNullOrEmpty(sqid)) return 0;
         
-        var result = Encoder.Decode(sqid);
-        return result.Count > 0 ? result[0] : 0;
+        return SqidCodec.DecodeCanonical(sqid) ?? 0;
     }
 
     public override void Write(Utf8JsonWriter writer, long value, JsonSerializerOptions options)
@@ -65,8 +64,7 @@ public class NullableSqidJsonConverter : JsonConverter<long?>
         var sqid = reader.GetString();
         if (string.IsNullOrEmpty(sqid)) return null;
         
-        var result = Encoder.Decode(sqid);
-        return result.Count > 0 ? result[0] : null;
+        return SqidCodec.DecodeCanonical(sqid);
     }
 
     public override void Write(Utf8JsonWriter writer, long? value, JsonSerializerOptions options)

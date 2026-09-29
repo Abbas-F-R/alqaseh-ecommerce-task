@@ -21,6 +21,18 @@ public class GlobalExceptionMiddleware(
         {
             await next(context);
         }
+        catch (BadHttpRequestException ex)
+        {
+            // Kestrel refused the request itself (body over the size limit, malformed framing): the client's mistake, not a server error.
+            logger.LogWarning("Bad request for {Method} {Path}: {Reason}", context.Request.Method, context.Request.Path, ex.Message);
+            await WriteClientErrorAsync(context, ex.StatusCode);
+        }
+        catch (System.Text.DecoderFallbackException ex)
+        {
+            // The body is not valid in the charset the client declared (for example charset=utf-16 with UTF-8 bytes).
+            logger.LogWarning("Undecodable request body for {Method} {Path}: {Reason}", context.Request.Method, context.Request.Path, ex.Message);
+            await WriteClientErrorAsync(context, StatusCodes.Status400BadRequest);
+        }
         catch (Exception ex)
         {
             var errorType = ErrorClassifier.Classify(ex);
@@ -33,6 +45,23 @@ public class GlobalExceptionMiddleware(
 
             await WriteProblemAsync(context, ex, errorType);
         }
+    }
+
+    private static async Task WriteClientErrorAsync(HttpContext context, int statusCode)
+    {
+        if (context.Response.HasStarted) return;
+
+        var problem = new ProblemDetails
+        {
+            Status = statusCode,
+            Title = statusCode == StatusCodes.Status413PayloadTooLarge ? "Request body too large" : "Bad request",
+            Detail = "The request could not be processed."
+        };
+        problem.Extensions["traceId"] = context.TraceIdentifier;
+
+        context.Response.Clear();
+        context.Response.StatusCode = statusCode;
+        await context.Response.WriteAsJsonAsync(problem, options: null, contentType: "application/problem+json; charset=utf-8");
     }
 
     private async Task WriteProblemAsync(HttpContext context, Exception exception, ErrorType errorType)
