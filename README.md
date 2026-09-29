@@ -10,7 +10,7 @@ ASP.NET Core (.NET 10) + SQL Server backend: JWT login for admins and customers,
 docker compose up --build        # builds the API, starts SQL Server + API; the database is created, migrated and seeded automatically
 ```
 
-Then open **<http://localhost:5207/swagger>**, pick **Admin** or **Customer** in the definition dropdown, log in with a demo user and click *Authorize*.
+Then open **<http://localhost:5207/swagger>**, pick **Admin** or **Customer** in the definition dropdown (or *All Endpoints*), log in with a demo user and click *Authorize*. A Scalar view of the same documents is at <http://localhost:5207/scalar/v1>.
 
 Prefer running from source? `docker compose up -d sqlserver --wait` then `dotnet run`.
 

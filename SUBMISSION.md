@@ -86,15 +86,16 @@ ASPNETCORE_ENVIRONMENT=Production Jwt__SecretKey="$(openssl rand -base64 48)" Co
 
 ## 2. API
 
-Every endpoint except login needs `Authorization: Bearer <token>`. Lists are paged with `pageNumber` (from 1, default 1) and `pageSize` (1–50, default 10) and return
-`{ "data": [...], "currentPage": 1, "pagesCount": 3, "totalCount": 21, "isLast": false }`.
+Every endpoint except login needs `Authorization: Bearer <token>`. Order lists and the admin product list are paged with `pageNumber` (from 0, default 0) and `pageSize` (1–50, default 10; the aliases `page` and `size` also work) and return
+`{ "data": [...], "currentPage": 0, "pagesCount": 3, "totalCount": 21, "isLast": false }`. The customer product list uses cursor pagination instead (below).
 
 | Endpoint | Who | What |
 |---|---|---|
 | `POST /api/auth/login` | anyone | username + password → bearer token, role |
 | `POST /api/products` | admin | create a product |
 | `PUT /api/products/{id}` | admin | replace a product's fields |
-| `GET /api/products?name=&category=` | admin, customer | filter by name (contains) and category. Admins get `cost` and exact `availableQuantity`; customers get `stockStatus` (`low` 0–4, `limited` 5–9, `available` 10+) |
+| `GET /api/admin/products?name=&category=` | admin | filter by name (contains) and category, page/offset pagination with totals; rows show `cost` and the exact `availableQuantity` |
+| `GET /api/customer/products?name=&category=&limit=&cursor=` | customer | same filters, cursor (keyset) pagination: `{ "data": [...], "nextCursor": "...", "hasMore": true }`; rows show `stockStatus` (`low` 0–4, `limited` 5–9, `available` 10+), never the quantity or cost |
 | `POST /api/orders` | customer | place an order (items, optional `discountCode`, `payment`) |
 | `GET /api/orders/my` | customer | own orders: total price, payment method, purchase date, discount amount (+ items) |
 | `GET /api/orders?customerId=&customer=&paymentMethod=` | admin | all orders with `profit`; filter by customer and payment method |
@@ -124,7 +125,7 @@ Ids are opaque strings (Sqids, e.g. `"b9X7mK2p"`): use them exactly as returned.
 TOKEN=$(curl -s localhost:5207/api/auth/login -H 'Content-Type: application/json' \
         -d '{"userName":"customer1","password":"Customer123!"}' | jq -r .token)
 
-curl -s "localhost:5207/api/products?category=garden" -H "Authorization: Bearer $TOKEN"
+curl -s "localhost:5207/api/customer/products?category=garden&limit=10" -H "Authorization: Bearer $TOKEN"
 
 curl -s localhost:5207/api/orders -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
      -d '{"items":[{"productId":"<id from the list>","quantity":2}],
@@ -154,13 +155,13 @@ What they cover: login and roles; product create/update/duplicate names (also un
 ## 4. Approach and key design decisions
 
 * **Vertical slices** (`Features/Auth|Products|Orders|Discounts|Payments`), each with controller, DTOs, service, repository and validators; shared building blocks in `Shared/`, technical plumbing in `Infrastructure/`.
-* **Validation in layers:** request shape by FluentValidation before any service runs; business rules in services, returned as `ServiceResult` with a stable error code (no exceptions for expected outcomes); the database enforces the invariants that must never be violated (unique product name, the four categories, non-negative amounts, one order per discount code).
+* **Validation in layers:** request shape by FluentValidation before any service runs; business rules in services, returned as `ServiceResult` with a stable error code (no exceptions for expected outcomes); the database enforces the invariants that must never be violated (unique product name, the four categories, non-negative amounts, non-blank names and codes, one order per discount code, one line per product in an order, a discount amount only together with a code).
 * **Checkout is one database transaction, all or nothing.** In order: take the stock (a guarded `UPDATE … WHERE AvailableQuantity >= @qty` that also returns the price and cost at that instant), validate and redeem the discount code (its row is locked, and a unique index on `Orders.DiscountCodeId` makes "used once" a database guarantee), store the order, its lines and the audit entry, and **only then charge the payment**. A declined payment, missing stock, a bad code or any error rolls everything back, so stock, codes and orders are never left half-changed. Concurrent orders can neither oversell a product nor redeem a code twice (both covered by tests).
 * **Order lines are snapshots** (name, price, cost at purchase time), so later price changes do not rewrite history and profit stays correct.
 * **Profit** of an order = the amount paid (subtotal − discount) − the cost of its items.
 * **Product audit fields:** `createdBy/createdAt` on creation and `updatedBy/updatedAt` on every admin update, written by the stored procedures in the same transaction as the change. Stock reduced by an order does not touch them.
-* **Performance:** all lists are paged in SQL (`OFFSET/FETCH`, ordered by an indexed key, total count in the same round trip); order lines for a whole page are loaded with one query (no N+1); indexes match the filters (category, customer + date, payment method + date).
-* **Migrations:** versioned SQL scripts (`Database/Migrations/V001__Schema.sql`, `V002__Procedures.sql`, `V003__AuditTriggers.sql`) are embedded in the assembly and applied once, in order, at startup (journal table `SchemaMigrations`, an application lock protects against two instances starting together). CRUD for users, products and the audit trail goes through stored procedures; the checkout statements are parameterized Dapper queries because they must run inside the transaction the application opens.
+* **Performance:** all lists are paged in SQL: `OFFSET/FETCH` with the total count in the same round trip for the admin lists, keyset (`TOP (limit + 1)` after the last id, no count, no OFFSET) for the customer product list; order lines for a whole page are loaded with one query (no N+1); indexes match the filters (category, customer + date, payment method + date).
+* **Migrations:** versioned SQL scripts (`V001__Schema` tables, `V002__Procedures` views and stored procedures, `V003__AuditTriggers`, `V004__ProductsKeysetPagination` index and cursor procedure, `V005__IntegrityConstraints`, `V006__ProductsGetAllPagesFromZero`) are embedded in the assembly and applied once, in order, at startup (journal table `SchemaMigrations`, an application lock protects against two instances starting together). All data access goes through stored procedures and views; the checkout procedures take the transaction the application opens, so they run inside it.
 * **Security:** BCrypt password hashes, unknown user and wrong password are indistinguishable (same error, same timing); JWT with issuer/audience/lifetime validation and short claim names (`sub`, `name`, `role`); no key or secret in the repository; the unhandled-exception middleware never leaks internals outside Development.
 * **Audit trail by database triggers** (the same design as the Official Correspondence System): `AuditTables` registers the audited tables, `usp_CreateAuditTrigger` creates a trigger per table, and the trigger calls `AuditWrite`, which stores one `AuditLog` row per changed record (action, table id, record id, the row as JSON) with the acting user taken from `SESSION_CONTEXT('UserId')`. Products, DiscountCodes, Orders and OrderItems are audited; the application only tells the database who is acting (the product procedures and the checkout transaction set the context), it writes no audit rows itself. Because triggers run inside the statement's transaction, a rolled-back checkout leaves no audit trace. `Users` is deliberately not audited (its rows hold password hashes). The trail is not exposed by any endpoint, as the assignment asks for none.
 * **Logging:** Serilog to `Logs/` (gitignored), partitioned by error type.
@@ -186,3 +187,9 @@ What they cover: login and roles; product create/update/duplicate names (also un
 * The name filter is a `LIKE '%text%'` search: correct and paged, but it scans the name column. It is fine for tens of thousands of products; millions would call for full-text search.
 * Tokens cannot be revoked before they expire and there is no refresh token or login rate limiting.
 * The default connection string uses the local Docker `sa` password for convenience; real deployments must supply their own via environment variables.
+
+
+**Product lists (two endpoints, two pagination styles, on purpose):** `GET /api/admin/products` uses page/offset pagination (`pageNumber` from 0, `pageSize` 1–50) and answers
+`{ "data": [...], "pagesCount", "currentPage", "totalCount", "isLast" }` because an admin dashboard needs totals and page jumping; `GET /api/customer/products` uses
+cursor (keyset) pagination (`limit` 1–50, `cursor`) and answers `{ "data": [...], "nextCursor", "hasMore" }` because customers browse a large catalogue page after page
+(constant cost per page, no duplicates or gaps while products change). Orders keep page/offset pagination.
