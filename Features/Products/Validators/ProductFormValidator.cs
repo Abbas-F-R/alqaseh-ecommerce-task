@@ -8,6 +8,9 @@ public class ProductFormValidator : AbstractValidator<ProductForm>
     private const int MoneyPrecision = 12;
     private const int MoneyScale = 2;
 
+    /// <summary>Upper bound of the stock of one product: far above any real catalogue, far below the int range.</summary>
+    public const int MaxQuantity = 1_000_000;
+
     public ProductFormValidator()
     {
         RuleFor(x => x.Name)
@@ -26,9 +29,10 @@ public class ProductFormValidator : AbstractValidator<ProductForm>
 
         RuleFor(x => x.Cost)
             .GreaterThanOrEqualTo(0).WithMessage("Cost must be greater than or equal to 0.")
-            .PrecisionScale(MoneyPrecision, MoneyScale, true).WithMessage("Cost must have at most 10 digits before and 2 after the decimal point.");
+            .PrecisionScale(MoneyPrecision, MoneyScale, true).WithMessage("Cost must have at most 10 digits before and 2 after the decimal point.")
+            .LessThanOrEqualTo(x => x.Price).WithMessage("Cost must not exceed the price."); // a product is never sold below what it costs
 
         RuleFor(x => x.AvailableQuantity)
-            .GreaterThanOrEqualTo(0).WithMessage("Available quantity must be greater than or equal to 0.");
+            .InclusiveBetween(0, MaxQuantity).WithMessage($"Available quantity must be between 0 and {MaxQuantity}.");
     }
 }

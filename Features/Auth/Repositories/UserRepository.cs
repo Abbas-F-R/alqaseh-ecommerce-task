@@ -17,4 +17,13 @@ public class UserRepository(DapperContext context) : IUserRepository
             new { UserName = userName },
             commandType: CommandType.StoredProcedure);
     }
+
+    public async Task<UserDto?> GetById(long id)
+    {
+        await using var connection = context.CreateConnection();
+        return await connection.QueryFirstOrDefaultAsync<UserDto>(
+            "UsersGetById",
+            new { Id = id },
+            commandType: CommandType.StoredProcedure);
+    }
 }

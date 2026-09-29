@@ -7,6 +7,9 @@ public class BaseFilter
 {
     public const int MaxPageSize = 50;
 
+    /// <summary>With the largest page size the offset stays far below the int range of the stored procedures.</summary>
+    public const int MaxPageNumber = 100_000;
+
     /// <summary>Items per page (1-50, default 10).</summary>
     public int PageSize { get; set; } = 10;
 

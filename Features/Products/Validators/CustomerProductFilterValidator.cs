@@ -14,6 +14,7 @@ public class CustomerProductFilterValidator : AbstractValidator<CustomerProductF
             .InclusiveBetween(1, MaxLimit).WithMessage($"Limit must be between 1 and {MaxLimit}.");
 
         RuleFor(x => x.Cursor)
+            .MaximumLength(100).WithMessage("Cursor must not exceed 100 characters.")
             .Must(ProductCursor.IsValid)
             .When(x => !string.IsNullOrWhiteSpace(x.Cursor))
             .WithMessage("Invalid cursor.");

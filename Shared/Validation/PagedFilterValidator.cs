@@ -11,7 +11,7 @@ public class PagedFilterValidator<T> : AbstractValidator<T> where T : BaseFilter
     public PagedFilterValidator()
     {
         RuleFor(x => x.PageNumber)
-            .GreaterThanOrEqualTo(0).WithMessage("Page number must be at least 0.");
+            .InclusiveBetween(0, BaseFilter.MaxPageNumber).WithMessage($"Page number must be between 0 and {BaseFilter.MaxPageNumber}.");
 
         RuleFor(x => x.PageSize)
             .InclusiveBetween(1, BaseFilter.MaxPageSize).WithMessage($"Page size must be between 1 and {BaseFilter.MaxPageSize}.");

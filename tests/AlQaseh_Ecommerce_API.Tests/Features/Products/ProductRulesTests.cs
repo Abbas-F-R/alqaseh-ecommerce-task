@@ -81,7 +81,7 @@ public class ProductRulesTests
         var money = (decimal)amount;
 
         _form.Validate(new ProductForm { Name = "Chair", Category = "furniture", Price = money, Cost = 1, AvailableQuantity = 5 }).IsValid.Should().Be(valid);
-        _form.Validate(new ProductForm { Name = "Chair", Category = "furniture", Price = 1, Cost = money, AvailableQuantity = 5 }).IsValid.Should().Be(valid);
+        _form.Validate(new ProductForm { Name = "Chair", Category = "furniture", Price = 9_999_999_999.99m, Cost = money, AvailableQuantity = 5 }).IsValid.Should().Be(valid);
     }
 
     [Fact]

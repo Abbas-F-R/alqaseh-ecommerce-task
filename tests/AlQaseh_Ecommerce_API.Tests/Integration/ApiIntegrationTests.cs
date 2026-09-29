@@ -98,6 +98,7 @@ public class ApiIntegrationTests(ApiFixture api) : IClassFixture<ApiFixture>
                      new { name = "A", category = "toys", price = 1, cost = 1, availableQuantity = 1 },
                      new { name = "A", category = "garden", price = 0, cost = 1, availableQuantity = 1 },
                      new { name = "A", category = "garden", price = 1, cost = -1, availableQuantity = 1 },
+                     new { name = "A", category = "garden", price = 10, cost = 10.01m, availableQuantity = 1 }, // sold below its cost
                      new { name = "A", category = "garden", price = 1, cost = 1, availableQuantity = -1 },
                      new { name = "A", category = "garden", price = 100.005m, cost = 1, availableQuantity = 1 },  // would be rounded
                      new { name = "A", category = "garden", price = 1e20m, cost = 1, availableQuantity = 1 }     // would overflow decimal(18,2)
