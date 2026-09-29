@@ -116,7 +116,7 @@ class PostgresSchemaIntegrationTest {
     @DisplayName("All migrations apply and the schema they produce satisfies Hibernate's validation")
     void migrationsApplyAndSchemaMatchesEntities() {
         assertThat(flyway.info().pending()).isEmpty();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("7");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("8");
     }
 
     @Test
@@ -132,7 +132,6 @@ class PostgresSchemaIntegrationTest {
                 "idx_orders_created_at",
                 "idx_orders_customer_created",
                 "idx_orders_payment_created",
-                "idx_products_category",
                 "idx_products_category_id",
                 "uq_discount_codes_code",
                 "uq_order_items_order_product",

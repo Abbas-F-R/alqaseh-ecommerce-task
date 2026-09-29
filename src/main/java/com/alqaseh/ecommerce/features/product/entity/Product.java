@@ -21,7 +21,7 @@ import java.math.BigDecimal;
  * {@code uq_products_name} on {@code LOWER(name)} (Flyway), which cannot be expressed in JPA annotations.
  */
 @Entity
-@Table(name = "products", indexes = @Index(name = "idx_products_category", columnList = "category"))
+@Table(name = "products", indexes = @Index(name = "idx_products_category_id", columnList = "category, id"))
 @Check(constraints = "price >= 0 AND cost >= 0 AND available_quantity >= 0")
 @Getter
 @Setter

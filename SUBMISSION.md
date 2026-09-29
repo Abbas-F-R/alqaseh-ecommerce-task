@@ -136,7 +136,7 @@ In addition the running application was tested from the outside through HTTP onl
   order leaves stock and discount code untouched.
 * **Concurrency:** optimistic locking (`@Version`) on products and discount codes; a unique index on `LOWER(name)` is the final guard for product names, and its violation is answered with 409.
 * **Performance:** filtering and pagination in the database; no N+1 (batch loading of order lines, one query for all products of an order, join fetch of the customer for the admin list);
-  indexes chosen from the actual queries (`orders(customer_id, created_at)`, `orders(payment_method, created_at)`, `products(category)`, unique indexes). Statement counts are asserted in tests.
+  indexes chosen from the actual queries (`orders(customer_id, created_at)`, `orders(payment_method, created_at)`, `products(category, id)`, unique indexes). Statement counts are asserted in tests.
 * **Money** is `BigDecimal` / `NUMERIC(12,2)`. Primary keys are UUID v7 (time ordered, index friendly). Audit fields come from Spring Data JPA auditing; a small `audit_logs` table records
   business events (product created/updated, order created, discount applied) and is not exposed by the API.
 * **Configuration:** profiles `dev` (default; demo data and users, local defaults, random JWT key per start), `prod` (everything from environment variables, no defaults, no demo data, Swagger off) and `test`.
