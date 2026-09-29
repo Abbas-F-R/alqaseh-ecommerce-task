@@ -53,17 +53,17 @@ public class Order extends BaseEntity {
     @JoinColumn(name = "customer_id", nullable = false, foreignKey = @ForeignKey(name = "fk_orders_customer"))
     private User customer;
 
-    @Column(name = "subtotal_amount", nullable = false, precision = 12, scale = 2)
+    @Column(name = "subtotal_amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal subtotalAmount;
 
-    @Column(name = "discount_amount", nullable = false, precision = 12, scale = 2)
+    @Column(name = "discount_amount", nullable = false, precision = 18, scale = 2)
     @Builder.Default
     private BigDecimal discountAmount = BigDecimal.ZERO;
 
-    @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
+    @Column(name = "total_amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal totalAmount;
 
-    @Column(name = "total_cost", nullable = false, precision = 12, scale = 2)
+    @Column(name = "total_cost", nullable = false, precision = 18, scale = 2)
     private BigDecimal totalCost;
 
     @ManyToOne(fetch = FetchType.LAZY)

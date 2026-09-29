@@ -121,7 +121,8 @@ In addition the running application was tested from the outside through HTTP onl
 10. **Roles:** customers see only their own orders; admins cannot place orders; only admins list all orders.
 11. **Currency** is not modelled; amounts are decimals with two digits (e.g. IQD).
 12. **Users, products and discount codes are seeded** (users by a startup seeder, products and codes by a Flyway script), as allowed by the assignment. No registration or admin endpoints for them.
-13. **No deletion:** the assignment does not ask for it, so products cannot be deleted (there is no `DELETE`).
+13. **Limits:** a product price and cost have at most 10 digits before and 2 after the decimal point; an order line has 1–10,000 units and an order at most 100 lines, so an order has at most 1,000,000 units and its amounts (`NUMERIC(18, 2)`, migration `V7`) can never overflow. Anything larger is a `400`.
+14. **No deletion:** the assignment does not ask for it, so products cannot be deleted (there is no `DELETE`).
 
 ## 9. Key technical decisions
 

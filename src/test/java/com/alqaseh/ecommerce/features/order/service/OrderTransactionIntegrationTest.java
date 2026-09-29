@@ -31,6 +31,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -120,6 +121,21 @@ class OrderTransactionIntegrationTest {
 
     private boolean discountUsed() {
         return discountCodeRepository.findById(discount.getId()).orElseThrow().isUsed();
+    }
+
+    @Test
+    @DisplayName("The largest order the API accepts (1,000,000 units at the largest price) fits the money columns")
+    void largestAcceptedOrderIsStored() {
+        Product big = productRepository.save(Product.builder().name("Big").category(ProductCategory.ELECTRONICS)
+                .price(new BigDecimal("9999999999.99")).cost(new BigDecimal("9999999999.99")).availableQuantity(1_000_000).build());
+        OrderItemRequest[] lines = new OrderItemRequest[100]; // 100 lines of 10,000 units, merged into one line of 1,000,000
+        Arrays.fill(lines, new OrderItemRequest(big.getId(), OrderItemRequest.MAX_QUANTITY));
+
+        Result<CustomerOrderResponse> result = orderService.createOrder(order(GOOD_CARD, null, lines));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getValue().getTotalPrice()).isEqualByComparingTo("9999999999990000.00");
+        assertThat(stockOf(big)).isZero();
     }
 
     @Test

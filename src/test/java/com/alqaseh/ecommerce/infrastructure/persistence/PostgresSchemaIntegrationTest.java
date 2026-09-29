@@ -116,7 +116,7 @@ class PostgresSchemaIntegrationTest {
     @DisplayName("All migrations apply and the schema they produce satisfies Hibernate's validation")
     void migrationsApplyAndSchemaMatchesEntities() {
         assertThat(flyway.info().pending()).isEmpty();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("5");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("7");
     }
 
     @Test
@@ -280,6 +280,21 @@ class PostgresSchemaIntegrationTest {
         assertRejected(() -> insertOrder(customer, "3", "5", "-2", code, "CREDIT_CARD", "COMPLETED"), "ck_orders_total_amount");
 
         insertOrder(customer, "100", "5", "95", code, "CREDIT_CARD", "COMPLETED");
+    }
+
+    @Test
+    @DisplayName("The money columns of an order hold the largest order the API accepts (1,000,000 units at 9,999,999,999.99)")
+    void orderMoneyColumnsHoldTheLargestAcceptedOrder() {
+        UUID customer = insertUser("ck_big", "CUSTOMER");
+        UUID product = insertProduct("Big Product");
+        UUID order = insertOrder(customer, "9999999999990000.00", "0", "9999999999990000.00", null, "CREDIT_CARD", "COMPLETED");
+
+        jdbc.update("""
+                INSERT INTO order_items (id, order_id, product_id, product_name, unit_price, unit_cost, quantity)
+                VALUES (?, ?, ?, 'Big Product', 9999999999.99, 9999999999.99, 1000000)""", UUID.randomUUID(), order, product);
+
+        assertThat(jdbc.queryForObject("SELECT total_amount FROM orders WHERE id = ?", java.math.BigDecimal.class, order))
+                .isEqualByComparingTo("9999999999990000.00");
     }
 
     @Test

@@ -153,6 +153,23 @@ class RequestValidationIntegrationTest {
 
     @Test
     @WithMockUser(roles = "CUSTOMER")
+    @DisplayName("A line quantity above 10,000 is a 400 (two such lines of one product used to overflow the merged int quantity and end as a 500)")
+    void quantityIsBounded() throws Exception {
+        mockMvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"items":[{"productId":"01923450-0000-7000-8000-000000000001","quantity":10001}],
+                         "payment":{"method":"CREDIT_CARD","cardNumber":"4111"}}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.validationErrors['items[0].quantity']", notNullValue()));
+
+        mockMvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"items":[{"productId":"01923450-0000-7000-8000-000000000001","quantity":2000000000},
+                                  {"productId":"01923450-0000-7000-8000-000000000001","quantity":2000000000}],
+                         "payment":{"method":"CREDIT_CARD","cardNumber":"4111"}}"""))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @WithMockUser(roles = "CUSTOMER")
     @DisplayName("Payment fields required by the chosen method are validated (card number for CreditCard)")
     void paymentFieldsRequiredByMethod() throws Exception {
         String item = "\"items\":[{\"productId\":\"01923450-0000-7000-8000-000000000001\",\"quantity\":1}]";

@@ -50,10 +50,10 @@ public class OrderItem {
     @Column(name = "product_name", nullable = false, length = 150)
     private String productName;
 
-    @Column(name = "unit_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "unit_price", nullable = false, precision = 18, scale = 2)
     private BigDecimal unitPrice;
 
-    @Column(name = "unit_cost", nullable = false, precision = 12, scale = 2)
+    @Column(name = "unit_cost", nullable = false, precision = 18, scale = 2)
     private BigDecimal unitCost;
 
     @Column(name = "quantity", nullable = false)
