@@ -4,7 +4,7 @@ Spring Boot 3.4 / Java 21 / PostgreSQL REST API for a small e-commerce backend: 
 role-dependent stock visibility, atomic order checkout (stock, discount code, payment, profit), and admin/customer order lists.
 
 **Setup, run, test users, assumptions, design decisions and known limitations: [SUBMISSION.md](SUBMISSION.md).**
-Review notes on the implementation: [CODE_REVIEW.md](CODE_REVIEW.md).
+Development notes (review findings and fixes): [CODE_REVIEW.md](CODE_REVIEW.md).
 
 ## Quick start
 
@@ -14,9 +14,9 @@ Review notes on the implementation: [CODE_REVIEW.md](CODE_REVIEW.md).
 docker compose up --build       # builds the API, starts PostgreSQL + API; ready when the log shows "Started"
 ```
 
-Then open **<http://localhost:8080/swagger-ui/index.html>**, pick **Admin** or **Customer** in the definition dropdown, log in with a demo user (below) and click *Authorize*.
+Then open **<http://localhost:8080/swagger-ui/index.html>**, pick **Admin (Dashboard)** or **Customer (App)** in the definition dropdown, log in with a demo user (below) and click *Authorize*.
 
-Prefer running from source? `docker compose up -d postgres` then `./mvnw spring-boot:run` (Windows: `mvnw.cmd spring-boot:run`).
+Prefer running from source? `docker compose up -d postgres`, then `DB_PASSWORD=dev_only_fake_password ./mvnw spring-boot:run` (Windows: set `$env:DB_PASSWORD="dev_only_fake_password"`, then `mvnw.cmd spring-boot:run`). The password is the throw-away one of the compose database; `application-dev.yml` defaults to a different one.
 
 > The same task is also implemented in .NET 10 / SQL Server on the [`dotnet` branch](../../tree/dotnet).
 
@@ -37,14 +37,15 @@ Prefer running from source? `docker compose up -d postgres` then `./mvnw spring-
 | `GET /api/orders/my` | customer | own orders |
 | `GET /api/orders` | admin | all orders with profit; filters `customer`, `customerId`, `paymentMethod` |
 
-Successful responses are `{ "timestamp", "success", "data" }`; errors are `{ "timestamp", "status", "code", "message", "path", "validationErrors"? }` with stable codes and
+Single-object responses are `{ "timestamp", "success", "data" }`; lists are `{ "data", "pagesCount", "currentPage", "totalCount", "isLast" }` (admin products, orders) or
+`{ "data", "nextCursor", "hasMore" }` (customer products); errors are `{ "timestamp", "status", "code", "message", "path", "validationErrors"? }` with stable codes and
 messages in the language of `Accept-Language` (`en`, `ar`). Enum values (`category`, `paymentMethod`) are accepted in any letter case and returned as the assignment spells them (`furniture`, `low`, `CreditCard`).
 
 ## Configuration
 
 | Profile | Use |
 | --- | --- |
-| `dev` (default) | local: database defaults, a random JWT key per start (or `JWT_SECRET`), demo data and users, debug details in 500 responses |
+| `dev` (default) | local: database defaults, a random JWT key per start (or `JWT_SECRET`), token lifetime 24 h (`JWT_EXPIRATION_MS`), demo data and users, debug details in 500 responses |
 | `prod` | everything from the environment, no defaults, no demo data or users, Swagger off |
 | `test` | automated tests |
 

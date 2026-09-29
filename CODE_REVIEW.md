@@ -1,5 +1,8 @@
 # Code Review — alqaseh-ecommerce-api
 
+> Development notes: the review findings and the fixes made during development. [SUBMISSION.md](SUBMISSION.md) is the authoritative description of the current state;
+> counts and measurements below are snapshots from the time of each round and are marked as such.
+
 Review of the implementation delivered by the previous agent, followed by the refactoring done in response.
 Scope: read everything (main, tests, Flyway, config, docs), criticise, fix, test, review again. No features were added.
 
@@ -9,7 +12,7 @@ carried a lot of ceremony (six validators, a second error system made of ten dea
 pagination class) and the README/SUBMISSION claimed things the code did not do. The most serious problems were not
 style problems; they were correctness and security bugs.
 
-Main code: **96 → 75 files, 3,916 → 2,880 lines (−26 %)**, with the bugs below fixed.
+Main code after the first round: **96 → 75 files, 3,916 → 2,880 lines (−26 %)**, with the bugs below fixed (snapshot; the later rounds added the round-2 API contract, keyset pagination and validation rules: `src/main/java` now has 85 files and about 3,700 lines).
 
 ---
 
@@ -48,8 +51,8 @@ to 409 `PRODUCT_NAME_ALREADY_EXISTS`, optimistic-lock conflicts to 409 `CONCURRE
 
 **Fix:** profiles `dev` (default) / `prod` / `test`. `prod` has no defaults for DB or secret, refuses to start with a
 missing/weak `JWT_SECRET` (clear message), does not seed users, does not load demo data, and disables Swagger.
-Seed SQL moved to `db/dev` (only in the dev profile). Verified by booting `prod` on an empty DB: admin login → 401,
-`/v3/api-docs` → 404.
+Seed SQL moved to `db/dev` (only in the dev profile). Expected in `prod`: no admin user (login → 401) and `/v3/api-docs` → 404 (documentation disabled);
+no automated test boots the `prod` profile.
 
 ### C4. The JWT filter turned infrastructure failures into "401 Unauthorized"
 `catch (Exception)` around token parsing *and* the user lookup: a database outage looked like an invalid token.
@@ -74,7 +77,7 @@ joined every product although only `product.id` is returned.
 | --- | --- | --- |
 | `CreateProductValidator`, `UpdateProductValidator`, `CreateOrderValidator`, `OrderItemValidator`, `DiscountValidator`, `ValidationResult` | Three of them re-checked Bean Validation (`null`, `<= 0`); the rest wrapped one `if` each and forced every service into `ValidationResult → Result` translation | Deleted. Shape validation = `@Valid`; DB-state rules are plain `if`s in the service |
 | 10 `AppException` subclasses + `AppException` + handler branch | Never thrown (only `ProductNotFoundException` in one controller): a second, dead error system next to `Result` | Deleted; one system (`Result` for expected outcomes, exceptions only for unexpected ones) |
-| `PaginationRequest` (165 lines, 8 factory methods, `getValidatedPage/Size` clamping already guaranteed by `@Min/@Max`) | Client-supplied `sortBy` was accepted but ignored by the product endpoint and would have raised `PropertyReferenceException` (500) on others | 40 lines: `page`, `size`, `toPageable(Sort)`; each endpoint picks its sort |
+| `PaginationRequest` (165 lines, 8 factory methods, `getValidatedPage/Size` clamping already guaranteed by `@Min/@Max`) | Client-supplied `sortBy` was accepted but ignored by the product endpoint and would have raised `PropertyReferenceException` (500) on others | a small class (about 45 lines): `page`, `size`, `toPageable(Sort)`; each endpoint picks its sort |
 | `CreateProductRequest` + `UpdateProductRequest` | Byte-for-byte identical | One `ProductRequest` |
 | Test-only overloads (`listProducts(name, category, page, size)`, `listAllOrders(...)`, `OrderSpecification.filterBy(String, PaymentMethod)`), `OrderItemRepository`, unused repo methods (`findByName`, `existsByCode`, `findByUserId`, `findByAction`, ...) | Production code that only exists for tests or for nobody | Deleted |
 | Manual `DaoAuthenticationProvider` bean | Spring Boot builds it from `UserDetailsService` + `PasswordEncoder` | Deleted (`ApplicationConfig` gone) |
@@ -140,7 +143,7 @@ C3 (secrets/seed/prod), C4 (filter swallowing), plus:
   exception message and asserts none of it reaches the client.
 * No length limits on `name`, `discountCode`, `items` → added.
 
-Checked and fine: `@PreAuthorize` on every endpoint, stateless sessions, BCrypt, generic `INVALID_CREDENTIALS` for both
+Checked and fine: `@PreAuthorize` on every endpoint except the public login, stateless sessions, BCrypt, generic `INVALID_CREDENTIALS` for both
 unknown user and wrong password, no password in any response, audit fields cannot be forged through the request body
 (`SpringAuditingIntegrationTest`).
 
@@ -158,7 +161,7 @@ unknown user and wrong password, no password in any response, audit fields canno
 Result API is exactly `Result.failure(ErrorCode.PRODUCT_NOT_FOUND)` / `Result.failure(ErrorCode.PRODUCT_NOT_FOUND, id)`.
 `ProductServiceImpl.createProduct` went from 45 lines with a validator round-trip to: check name, save, audit, map.
 Validation error body: `{ "code": "VALIDATION_ERROR", "message": "...", "validationErrors": { "field": "message" } }`
-(a map keyed by field rather than an array — one message per field, deterministic order).
+(a map keyed by field rather than an array — one message per field).
 
 ## 8. Database Problems
 
@@ -167,7 +170,7 @@ Flyway `V3__review_hardening.sql` (V1/V2 untouched — applied migrations must n
 * `discount_codes.version` (C5).
 * Discount lookups use the upper-cased code with `WHERE code = ?`, but V1 indexed `UPPER(code)` (unusable for that
   query) → one unique index on `code`, data normalised.
-* **Dropped 12 indexes** nothing can use (each one a write penalty) and replaced 3 (`idx_orders_payment_method`, the two discount-code indexes): the four `is_deleted` boolean indexes (the column itself is gone, section 12); `idx_users_username`
+* **Dropped 12 indexes** nothing can use (each one a write penalty) and replaced 4 (`idx_orders_payment_method`, the two discount-code indexes and the partial product-name index): the four `is_deleted` boolean indexes (the column itself is gone, section 12); `idx_users_username`
   (duplicate of the unique constraint), `idx_products_name` (duplicate of the unique index; `LIKE '%x%'` cannot use a
   b-tree anyway), `idx_orders_customer_id` (prefix of `(customer_id, created_at)`), `idx_orders_status` (one value),
   `idx_order_items_product_id` (products are never hard-deleted), three of four `audit_logs` indexes (write-only table).
@@ -180,6 +183,9 @@ Flyway `V3__review_hardening.sql` (V1/V2 untouched — applied migrations must n
   injectable `Clock`.
 * Name uniqueness: the unique index on `LOWER(name)` (`uq_products_name`) is the final guard; the application pre-check uses the same `lower()`
   expression, and the constraint violation of a real race is mapped to 409.
+
+Later migrations (not part of the first review): `V4` integrity constraints, `V5` keyset index `(category, id)`, `V7` wider order money columns, `V8` drops the then redundant `idx_products_category`,
+`V9` product integrity rules, `V10` trimmed discount codes; the demo data is `V2` and `V6` in `db/dev`. See SUBMISSION sections 3 and 8a.
 
 UUID v7: kept. Spring Boot 3.4 ships Hibernate 6.6 (no built-in v7; that arrives with Hibernate 7 / Boot 4) and PostgreSQL 16/17 has no
 `uuidv7()`. FasterXML JUG through a 1-class generator is the smallest correct option; v4 is not used anywhere.
@@ -198,7 +204,7 @@ UUID v7: kept. Spring Boot 3.4 ships Hibernate 6.6 (no built-in v7; that arrives
 
 ## 10. Verification
 
-See section 12 for the final numbers: unit and integration tests on H2 and on PostgreSQL (Docker), the application started from `docker compose` + `./mvnw spring-boot:run`
+See section 12 for the numbers of round 2 (snapshot): unit and integration tests on H2 and on PostgreSQL (Docker), the application started from `docker compose` + `./mvnw spring-boot:run`
 and exercised through HTTP only (300 checks), `prod` profile boot checks, and an OpenAPI document compared with the real behaviour.
 
 ## 11. Remaining Decisions (need a human)
@@ -254,12 +260,15 @@ accept enum values in any letter case, no new features.
 ### Swagger / OpenAPI
 Generated by springdoc from the controllers and DTOs, completed centrally in `OpenApiConfig` (responses, typed envelope schemas, examples) with the real examples in `ApiExamples`.
 Before: list parameters were one opaque `filter` object, every endpoint showed only `200 OK` with an empty schema (although creates answer 201), and login was marked as secured.
-Now: expanded query parameters with defaults and limits; per endpoint every real response (`201`, `400` as `VALIDATION_ERROR` or `BAD_REQUEST`, `401`, `402`, `403`, `404`, `409`, `500`);
+Now: expanded query parameters with defaults and limits; per endpoint the success response and the business responses (`200`/`201`, `400` as `VALIDATION_ERROR` or `INSUFFICIENT_STOCK`, `401` for login, `402`, `404`, `409`;
+the 401/403 of secured endpoints are stated in the API description, 500 is not listed per endpoint);
 request examples; admin / customer / empty-page examples; bearer authorisation only where required. `OpenApiDocumentationTest` guards it (exact endpoint set, no DELETE, statuses per endpoint,
 every error example uses an existing `ErrorCode` with its real status and English message). The external test additionally checks that every status/code observed on the real API is
 documented and that every documented case was observed.
 
-### Verification (final)
+### Verification at the end of round 2 (snapshot)
+The numbers below are from that time (migrations `V1` + `V3`). Later work added migrations `V4`–`V10`, the keyset list and the validation rules, and the suite grew (SUBMISSION states the current count).
+
 | What | Result |
 | --- | --- |
 | `./mvnw clean test` | 159 tests, 0 failures, 0 skipped |
