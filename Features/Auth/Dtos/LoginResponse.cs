@@ -16,7 +16,6 @@ public class LoginResponse
     public string Role { get; set; } = string.Empty;
 
     public string Token { get; set; } = string.Empty;
-    public string Type { get; set; } = "Bearer";
 
     /// <summary>UTC time at which the token stops being valid.</summary>
     public DateTime ExpiresAt { get; set; }

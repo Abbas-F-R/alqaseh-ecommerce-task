@@ -6,6 +6,12 @@
 # dotenv files
 .env
 
+# Environment configuration files containing sensitive secrets/local DB credentials
+appsettings.Development.json
+appsettings.Production.json
+appsettings.*.json
+!appsettings.json
+
 # User-specific files
 *.rsuser
 *.suo

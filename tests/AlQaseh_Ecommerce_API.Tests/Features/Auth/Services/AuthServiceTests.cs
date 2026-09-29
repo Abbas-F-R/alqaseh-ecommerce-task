@@ -40,7 +40,6 @@ public class AuthServiceTests
         result.IsSuccess.Should().BeTrue();
         result.Data!.UserId.Should().Be(7);
         result.Data.Role.Should().Be("Customer");
-        result.Data.Type.Should().Be("Bearer");
         result.Data.ExpiresAt.Should().Be(TestHelpers.Now.UtcDateTime.AddMinutes(30));
     }
 
