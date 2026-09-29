@@ -2,8 +2,10 @@ package com.alqaseh.ecommerce.features.product.dto.request;
 
 import com.alqaseh.ecommerce.features.product.entity.ProductCategory;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -25,6 +27,9 @@ import java.math.BigDecimal;
 @Schema(description = "Product data for create and update")
 public class ProductRequest {
 
+    /** Upper bound of the stock of one product: far above any real catalogue, far below the int range. */
+    public static final int MAX_QUANTITY = 1_000_000;
+
     @NotBlank(message = "Product name is required")
     @Size(max = 150, message = "Product name must not exceed 150 characters")
     @Schema(description = "Unique product name", example = "Standing Desk")
@@ -35,7 +40,7 @@ public class ProductRequest {
     private ProductCategory category;
 
     @NotNull(message = "Price is required")
-    @DecimalMin(value = "0.00", message = "Price must be greater than or equal to 0")
+    @DecimalMin(value = "0.00", inclusive = false, message = "Price must be greater than 0")
     @Digits(integer = 10, fraction = 2, message = "Price must have at most 10 integer and 2 fraction digits")
     @Schema(description = "Customer selling price", example = "350.00")
     private BigDecimal price;
@@ -48,8 +53,15 @@ public class ProductRequest {
 
     @NotNull(message = "Available quantity is required")
     @Min(value = 0, message = "Available quantity must be greater than or equal to 0")
+    @Max(value = MAX_QUANTITY, message = "Available quantity cannot exceed " + MAX_QUANTITY)
     @Schema(description = "Stock inventory count", example = "15")
     private Integer availableQuantity;
+
+    /** A product is never sold below what it costs. A missing value is reported by its own @NotNull. */
+    @AssertTrue(message = "Cost must not exceed the price")
+    private boolean isCostNotAbovePrice() {
+        return price == null || cost == null || cost.compareTo(price) <= 0;
+    }
 
     /** Names are compared and stored trimmed, so whitespace can never create a "different" duplicate. */
     public void setName(String name) {

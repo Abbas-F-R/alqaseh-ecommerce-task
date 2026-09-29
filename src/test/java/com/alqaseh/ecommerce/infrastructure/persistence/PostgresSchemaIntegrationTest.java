@@ -116,7 +116,7 @@ class PostgresSchemaIntegrationTest {
     @DisplayName("All migrations apply and the schema they produce satisfies Hibernate's validation")
     void migrationsApplyAndSchemaMatchesEntities() {
         assertThat(flyway.info().pending()).isEmpty();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("8");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
     }
 
     @Test
@@ -294,6 +294,66 @@ class PostgresSchemaIntegrationTest {
 
         assertThat(jdbc.queryForObject("SELECT total_amount FROM orders WHERE id = ?", java.math.BigDecimal.class, order))
                 .isEqualByComparingTo("9999999999990000.00");
+    }
+
+    @Test
+    @DisplayName("Products: trimmed name, price above 0, cost not above the price, stock at most 1,000,000, updated not before created (V9)")
+    void productIntegrity() {
+        UUID admin = insertUser("ck_product", "ADMIN");
+        String insert = """
+                INSERT INTO products (id, name, category, price, cost, available_quantity, version, created_by, created_at, updated_at)
+                VALUES (?, ?, 'FURNITURE', ?::numeric, ?::numeric, ?, 0, ?, now(), ?::timestamptz)""";
+
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), " Padded", "10", "5", 1, admin, null), "ck_products_name_trimmed");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "Padded ", "10", "5", 1, admin, null), "ck_products_name_trimmed");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "Free", "0", "0", 1, admin, null), "ck_products_price");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "Negative price", "-1", "0", 1, admin, null), "ck_products_"); // the cost rules fire first
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "Negative cost", "10", "-0.01", 1, admin, null), "ck_products_cost");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "Below cost", "10", "10.01", 1, admin, null), "ck_products_cost_within_price");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "Far below cost", "0.01", "9999999999.99", 1, admin, null), "ck_products_cost_within_price");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "Too much stock", "10", "5", 1_000_001, admin, null), "ck_products_quantity_max");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "Negative stock", "10", "5", -1, admin, null), "ck_products_available_quantity");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "Time travel", "10", "5", 1, admin, "2000-01-01T00:00:00Z"), "ck_products_updated_after_created");
+
+        jdbc.update(insert, UUID.randomUUID(), "Boundary stock", "0.01", "0.01", 1_000_000, admin, null);
+        jdbc.update(insert, UUID.randomUUID(), "Empty stock", "10", "0", 0, admin, "2999-01-01T00:00:00Z");
+        jdbc.update(insert, UUID.randomUUID(), "Break even", "10", "10", 1, admin, null);
+        UUID sold = UUID.randomUUID();
+        jdbc.update(insert, sold, "Later repriced", "10", "5", 1, admin, null);
+        assertRejected(() -> jdbc.update("UPDATE products SET price = 4 WHERE id = ?", sold), "ck_products_cost_within_price");
+    }
+
+    @Test
+    @DisplayName("Discount codes: surrounding whitespace, lower case and blank codes are refused (V4, V10)")
+    void discountCodeFormat() {
+        String insert = """
+                INSERT INTO discount_codes (id, code, amount, minimum_order_total, expires_at, used, version)
+                VALUES (?, ?, 5, 0, now() + interval '1 day', false, 0)""";
+
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), " PADDED"), "ck_discount_codes_code_trimmed");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "PADDED "), "ck_discount_codes_code_trimmed");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "lower"), "ck_discount_codes_code");
+        assertRejected(() -> jdbc.update(insert, UUID.randomUUID(), "   "), "ck_discount_codes_code");
+        jdbc.update(insert, UUID.randomUUID(), "GOOD5");
+    }
+
+    @Test
+    @DisplayName("Foreign keys: a product, an order line or an order that points at nothing is refused")
+    void foreignKeys() {
+        UUID customer = insertUser("ck_fk", "CUSTOMER");
+        UUID order = insertOrder(customer, "10", "0", "10", null, "CREDIT_CARD", "COMPLETED");
+        String line = "INSERT INTO order_items (id, order_id, product_id, product_name, unit_price, unit_cost, quantity) VALUES (?, ?, ?, 'x', 1, 1, 1)";
+
+        assertRejected(() -> jdbc.update(line, UUID.randomUUID(), order, UUID.randomUUID()), "fk_order_items_product");
+        assertRejected(() -> jdbc.update(line, UUID.randomUUID(), UUID.randomUUID(), insertProduct("Real")), "fk_order_items_order");
+        assertRejected(() -> insertOrder(UUID.randomUUID(), "10", "0", "10", null, "CREDIT_CARD", "COMPLETED"), "fk_orders_customer");
+        assertRejected(() -> insertOrder(customer, "10", "5", "5", UUID.randomUUID(), "CREDIT_CARD", "COMPLETED"), "fk_orders_discount_code");
+    }
+
+    @Test
+    @DisplayName("On a new database every constraint is validated: none is left NOT VALID")
+    void everyConstraintIsValidated() {
+        assertThat(jdbc.queryForList("SELECT conrelid::regclass || '.' || conname FROM pg_constraint WHERE NOT convalidated", String.class)).isEmpty();
     }
 
     @Test

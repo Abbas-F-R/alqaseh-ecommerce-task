@@ -39,7 +39,7 @@ Starts PostgreSQL 17 (`postgres:17-alpine`) with database `alqaseh_db`, user `po
 ```
 
 API at <http://localhost:8080> (`SERVER_PORT=9090 ./mvnw spring-boot:run` for another port; `DB_PORT` as in step 2).
-On start Flyway applies the migrations (`V1` schema, `V3` hardening, `V4` integrity constraints, `V5` keyset index, `V7` order money columns, `V8` redundant index; in the `dev` profile also the demo data `V2` and `V6`) and the dev seeder creates the demo users.
+On start Flyway applies the migrations (`V1` schema, `V3` hardening, `V4` integrity constraints, `V5` keyset index, `V7` order money columns, `V8` redundant index, `V9` product integrity rules, `V10` trimmed discount codes; in the `dev` profile also the demo data `V2` and `V6`) and the dev seeder creates the demo users.
 Stop with Ctrl+C; `docker compose down` stops the database.
 
 ## 4. API documentation (Swagger / OpenAPI)
@@ -99,7 +99,7 @@ In addition the running application was tested from the outside through HTTP onl
 | One discount code per order: fixed amount, minimum order total, expiry, single use | `DiscountServiceImpl.redeem`, `discountCode` field of the order |
 | Admin: list all orders with profit, filter by customer and payment method | `GET /api/orders?customer=&customerId=&paymentMethod=` |
 | Customer: own orders with total price, payment method, date, discount amount | `GET /api/orders/my` |
-| Bonus: tests, migrations, API documentation | 177 tests (unit, H2, real PostgreSQL), Flyway `V1–V8`, Swagger UI with one document per role |
+| Bonus: tests, migrations, API documentation | 223 tests (unit, H2, real PostgreSQL), Flyway `V1–V10`, Swagger UI with one document per role |
 
 ## 8. Assumptions
 
@@ -121,8 +121,33 @@ In addition the running application was tested from the outside through HTTP onl
 10. **Roles:** customers see only their own orders; admins cannot place orders; only admins list all orders.
 11. **Currency** is not modelled; amounts are decimals with two digits (e.g. IQD).
 12. **Users, products and discount codes are seeded** (users by a startup seeder, products and codes by a Flyway script), as allowed by the assignment. No registration or admin endpoints for them.
-13. **Limits:** a product price and cost have at most 10 digits before and 2 after the decimal point; an order line has 1–10,000 units and an order at most 100 lines, so an order has at most 1,000,000 units and its amounts (`NUMERIC(18, 2)`, migration `V7`) can never overflow. Anything larger is a `400`.
-14. **No deletion:** the assignment does not ask for it, so products cannot be deleted (there is no `DELETE`).
+13. **Limits:** a product price and cost have at most 10 digits before and 2 after the decimal point, a product's stock is at most 1,000,000 units, a login name has at most 50 characters and a password 128, list filters and pages are bounded (page 0-100,000, name filters 150 characters); an order line has 1–10,000 units and an order at most 100 lines, so an order has at most 1,000,000 units and its amounts (`NUMERIC(18, 2)`, migration `V7`) can never overflow. Anything larger is a `400`.
+14. **Price and cost:** the price is greater than 0 (a free product is not a catalogue entry), the cost is at least 0 and never above the price (a product is not sold below what it costs: `400` in the API and `CHECK cost <= price` in the database). The profit of an order can still be negative when a fixed-amount discount code is larger than the margin of the goods.
+15. **No deletion:** the assignment does not ask for it, so products cannot be deleted (there is no `DELETE`).
+
+## 8a. Validation and integrity rules
+
+Every rule is enforced in the best layer for it: the API answers a clear `400` before anything is stored, the database refuses the impossible state even for a writer that bypasses the API, and the rules that race (stock, a discount code, a product name) are decided atomically. "Production integrity" rules beyond the assignment's text (bounds, formats, trimming) add no feature; they only refuse bad data.
+
+| Area | Rule | API | Database | Race protection |
+| --- | --- | --- | --- | --- |
+| Product name | 1-150 characters, stored trimmed, unique ignoring case | `400`, `409` | `NOT NULL`, non-blank and trimmed `CHECK`s, unique index on `lower(name)` | the unique index decides (`409`) |
+| Category | one of the four | `400` | `CHECK` | - |
+| Price | greater than 0, at most 10 digits before and 2 after the decimal point | `400` | `CHECK price > 0`, `NUMERIC(12,2)` | - |
+| Cost | 0 or more, same precision, never above the price (assumption 14) | `400` | `CHECK cost >= 0`, `CHECK cost <= price` | - |
+| Stock | 0 to 1,000,000 | `400` | `CHECK`s | `@Version`: two orders can never both take the same units |
+| Audit columns | created/updated by and at come from the authenticated user; "updated" never precedes "created" | - | foreign keys to `users`, `NOT NULL created_at`, `CHECK updated_at >= created_at` | - |
+| Order | 1-100 lines, 1-10,000 units per line, a repeated product is one line, prices and costs read from the database and copied into the lines | `400`, `404`, `409` | one line per product (unique), quantity `> 0`, `total = subtotal - discount >= 0`, a discount only with a code, foreign keys, `NUMERIC(18,2)` | one transaction: stock, code, order, then the charge; a decline rolls everything back |
+| Payment | method is one of two; CreditCard: 12-19 digits; XyzWallet: phone of 8-15 digits (optional +) and a password of 1-128 characters; fields of the other method are refused; only the method is stored and no secret is logged | `400` | `CHECK` on the method | - |
+| Discount code | at most 50 characters, trimmed, upper-case, unique; amount above 0, minimum 0 or more; not expired, minimum met, not above the subtotal, used once | `400`, `409` | `CHECK`s, unique code, unique `orders.discount_code_id` | `@Version` on the code and the unique index: exactly one of two parallel orders wins |
+| Login | user name 1-50 characters of letters, digits and . _ @ - (no control characters can reach the log); password 1-128 characters; same error for an unknown user and a wrong password; BCrypt | `400`, `401` | `CHECK` on the role, unique user name | - |
+| Token | signature, issuer and expiry are verified; the user is loaded from the database on every request, so a deleted user or a changed role is effective at once | `401`, `403` | - | - |
+| Authorization | every endpoint has a role; a customer's own orders are read by the id in the token, never by a client parameter | `403` | - | - |
+| Lists | page 0-100,000, size 1-50, name filter 150 characters, customer filter 50, cursor 100 and valid | `400` | indexes chosen from the queries | - |
+
+Kept on purpose: order lines are owned by their order (`ON DELETE CASCADE`, nothing deletes orders); `created_by` may be null only for demo rows loaded by SQL; the role of an order's customer is guaranteed by authorization, not by a trigger.
+
+Migrations that add a constraint (`V9`, `V10`) add it `NOT VALID` and validate it at once when the existing rows satisfy it: a database that already holds a row the new rule forbids still starts, the rule guards every new or changed row from the first moment, and `ALTER TABLE ... VALIDATE CONSTRAINT` completes it after the row is corrected. On a new database nothing is left unvalidated. `MigrationWithDataTest` runs this on a PostgreSQL that holds such rows.
 
 ## 9. Key technical decisions
 
@@ -161,6 +186,7 @@ In addition the running application was tested from the outside through HTTP onl
 * Bean Validation messages (field errors) are English only; business error messages are English and Arabic.
 * Every authenticated request loads the user (one indexed query) so that a removed user is locked out immediately.
 * Product prices are not versioned other than through the order snapshots.
+* There is no login rate limiting (repeated wrong passwords are not throttled) and a token cannot be revoked before it expires (stateless JWT); the assignment asks for neither.
 
 ## 12. cURL walkthrough
 

@@ -1,6 +1,7 @@
 package com.alqaseh.ecommerce.features.product.dto.request;
 
 import com.alqaseh.ecommerce.features.product.entity.ProductCategory;
+import jakarta.validation.constraints.Size;
 import com.alqaseh.ecommerce.features.product.validation.ValidCursor;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
@@ -24,6 +25,7 @@ public class CustomerProductFilterRequest implements ProductCriteria {
     public static final int MAX_LIMIT = 50;
 
     @Schema(description = "Name contains (case-insensitive)")
+    @Size(max = 150, message = "Name filter cannot exceed 150 characters")
     private String name;
 
     @Schema(description = "Product category (any letter case)")
@@ -36,6 +38,7 @@ public class CustomerProductFilterRequest implements ProductCriteria {
     private Integer limit = DEFAULT_LIMIT;
 
     @ValidCursor
+    @Size(max = 100, message = "Cursor cannot exceed 100 characters")
     @Schema(description = "Opaque cursor: the nextCursor of the previous page")
     private String cursor;
 

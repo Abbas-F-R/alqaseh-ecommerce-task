@@ -22,7 +22,7 @@ import java.math.BigDecimal;
  */
 @Entity
 @Table(name = "products", indexes = @Index(name = "idx_products_category_id", columnList = "category, id"))
-@Check(constraints = "price >= 0 AND cost >= 0 AND available_quantity >= 0")
+@Check(constraints = "price > 0 AND cost >= 0 AND cost <= price AND available_quantity >= 0 AND available_quantity <= 1000000")
 @Getter
 @Setter
 @NoArgsConstructor

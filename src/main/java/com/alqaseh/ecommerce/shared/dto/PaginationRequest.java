@@ -26,8 +26,11 @@ public class PaginationRequest {
 
     public static final int DEFAULT_SIZE = 10;
     public static final int MAX_SIZE = 50;
+    /** With the largest page size the offset stays far below the int range of the databases. */
+    public static final int MAX_PAGE = 100_000;
 
     @Min(value = 0, message = "Page number cannot be negative")
+    @Max(value = MAX_PAGE, message = "Page number cannot exceed " + MAX_PAGE)
     @Schema(description = "Page (from 0)", defaultValue = "0", minimum = "0")
     @Builder.Default
     private int page = 0;

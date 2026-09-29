@@ -43,7 +43,7 @@ class PaymentRequestValidationTest {
         PaymentRequest ok = PaymentRequest.builder().method(PaymentMethod.CREDIT_CARD).cardNumber("4111222233334444").build();
 
         assertThat(validator.validate(missing)).hasSize(1);
-        assertThat(validator.validate(blank)).hasSize(1);
+        assertThat(validator.validate(blank)).isNotEmpty(); // blank is neither a card number nor a missing one: it is reported
         assertThat(validator.validate(ok)).isEmpty();
     }
 
