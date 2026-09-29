@@ -29,6 +29,7 @@
         <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.0" />
         <!-- Newer than the version Swashbuckle brings in (fixes GHSA-v5pm-xwqc-g5wc). -->
         <PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />
+        <PackageReference Include="Scalar.AspNetCore" Version="2.17.11" />
         <PackageReference Include="Scrutor" Version="7.0.0" />
         <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />

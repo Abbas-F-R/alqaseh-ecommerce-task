@@ -1,4 +1,5 @@
 using AlQaseh_Ecommerce_API.Infrastructure.Middleware;
+using Scalar.AspNetCore;
 
 namespace AlQaseh_Ecommerce_API.Shared.Extensions;
 
@@ -20,6 +21,7 @@ public static class PipelineExtension
             app.UseSwagger();
             app.UseSwaggerUI(options =>
             {
+                options.SwaggerEndpoint($"/swagger/{SwaggerExtension.AllDocument}/swagger.json", "All Endpoints (v1)");
                 options.SwaggerEndpoint($"/swagger/{SwaggerExtension.AdminDocument}/swagger.json", "Admin");
                 options.SwaggerEndpoint($"/swagger/{SwaggerExtension.CustomerDocument}/swagger.json", "Customer");
                 options.RoutePrefix = "swagger";
@@ -31,6 +33,16 @@ public static class PipelineExtension
         app.UseMiddleware<UserContextMiddleware>();
         app.UseAuthorization();
         app.MapControllers();
+
+        if (app.Configuration.GetValue("Swagger:Enabled", true))
+        {
+            app.MapScalarApiReference(options =>
+            {
+                options.WithTitle("Al Qaseh E-Commerce API")
+                       .WithTheme(ScalarTheme.Moon)
+                       .WithOpenApiRoutePattern("/swagger/{documentName}/swagger.json");
+            }).AllowAnonymous();
+        }
 
         return app;
     }

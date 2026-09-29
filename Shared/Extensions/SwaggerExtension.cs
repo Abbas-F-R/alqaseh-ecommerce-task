@@ -15,11 +15,20 @@ public static class SwaggerExtension
 {
     public const string AdminDocument = "1-admin";
     public const string CustomerDocument = "2-customer";
+    public const string AllDocument = "v1";
 
     public static IServiceCollection AddSwaggerDocumentation(this IServiceCollection services)
     {
         services.AddSwaggerGen(options =>
         {
+            // All endpoints document for complete reference (e.g. Scalar /v1)
+            options.SwaggerDoc(AllDocument, new OpenApiInfo
+            {
+                Title = "Al Qaseh E-Commerce API",
+                Version = "v1",
+                Description = "Complete API reference. Sign in with POST /api/auth/login, then authorize with the Bearer token."
+            });
+
             // One document per role, so that each user sees only the endpoints they may call. Login is in both.
             options.SwaggerDoc(AdminDocument, new OpenApiInfo
             {
@@ -37,6 +46,9 @@ public static class SwaggerExtension
             // An endpoint belongs to the document of every role it allows; an endpoint without roles (login) belongs to both.
             options.DocInclusionPredicate((document, api) =>
             {
+                if (document == AllDocument)
+                    return true;
+
                 var roles = api.ActionDescriptor.EndpointMetadata.OfType<IAuthorizeData>()
                     .Select(a => a.Roles).Where(r => !string.IsNullOrWhiteSpace(r))
                     .SelectMany(r => r!.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
