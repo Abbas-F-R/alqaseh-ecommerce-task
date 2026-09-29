@@ -1,0 +1,44 @@
+# SQL Server for local development. The application creates the database and its tables by itself on first start.
+#   docker compose up --build     build and start SQL Server + the API (Swagger: http://localhost:5207/swagger)
+#   docker compose up -d sqlserver   only the database (then run the API with dotnet run)
+#   docker compose down -v        stop and delete the data
+#
+# Port 1433 taken? Start with another one, e.g.  DB_PORT=14330 docker compose up -d
+# and point the application at it:               ConnectionStrings__DefaultConnection="Server=localhost,14330;Database=AlQaseh_Ecommerce;User Id=sa;Password=DevOnly_Fake_Pass1!;TrustServerCertificate=True"
+# The sa password below is a FAKE, local-only placeholder that matches the default connection string in appsettings.json.
+# It protects nothing: change it (in both places) or override it with environment variables for anything that is not a throw-away local database.
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: alqaseh-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "DevOnly_Fake_Pass1!"
+    ports:
+      - "${DB_PORT:-1433}:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  # The API itself (Development: demo data, random JWT key, database created and migrated on start).
+  # Skip it with:  docker compose up -d sqlserver
+  api:
+    build: .
+    container_name: alqaseh-api
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=AlQaseh_Ecommerce;User Id=sa;Password=DevOnly_Fake_Pass1!;TrustServerCertificate=True"
+    ports:
+      - "${API_PORT:-5207}:8080"   # set API_PORT=9090 if 5207 is taken
+
+volumes:
+  sqlserver-data:
