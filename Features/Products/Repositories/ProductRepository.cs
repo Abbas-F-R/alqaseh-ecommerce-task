@@ -1,7 +1,9 @@
 using System.Data;
 using AlQaseh_Ecommerce_API.Features.Products.Dtos;
+using AlQaseh_Ecommerce_API.Features.Products.Utils;
 using AlQaseh_Ecommerce_API.Infrastructure.Persistence;
 using AlQaseh_Ecommerce_API.Shared.Attributes;
+using AlQaseh_Ecommerce_API.Shared.Base.dto;
 using Dapper;
 
 namespace AlQaseh_Ecommerce_API.Features.Products.Repositories;
@@ -16,7 +18,7 @@ public class ProductRepository(DapperContext context) : IProductRepository
             "ProductsGetById", new { Id = id }, commandType: CommandType.StoredProcedure);
     }
 
-    public async Task<(List<AdminProductResponse> Data, int TotalCount)> GetAll(ProductFilter filter)
+    public async Task<(List<AdminProductResponse> Data, int TotalCount)> GetPage(AdminProductFilter filter)
     {
         await using var connection = context.CreateConnection();
         await using var multi = await connection.QueryMultipleAsync(
@@ -25,7 +27,7 @@ public class ProductRepository(DapperContext context) : IProductRepository
             {
                 filter.PageNumber,
                 filter.PageSize,
-                Name = string.IsNullOrWhiteSpace(filter.Name) ? null : EscapeLike(filter.Name.Trim()),
+                Name = string.IsNullOrWhiteSpace(filter.Name) ? null : SqlLike.Escape(filter.Name.Trim()),
                 Category = string.IsNullOrWhiteSpace(filter.Category) ? null : filter.Category
             },
             commandType: CommandType.StoredProcedure);
@@ -33,6 +35,29 @@ public class ProductRepository(DapperContext context) : IProductRepository
         var totalCount = await multi.ReadFirstAsync<int>();
         var data = (await multi.ReadAsync<AdminProductResponse>()).ToList();
         return (data, totalCount);
+    }
+
+    public async Task<CursorResponse<AdminProductResponse>> GetCursorPage(CustomerProductFilter filter)
+    {
+        ProductCursor.TryDecode(filter.Cursor, out var afterId);
+
+        await using var connection = context.CreateConnection();
+        var rows = (await connection.QueryAsync<AdminProductResponse>(
+            "ProductsGetCursor",
+            new
+            {
+                Limit = filter.Limit,
+                AfterId = afterId > 0 ? (long?)afterId : null,
+                Name = string.IsNullOrWhiteSpace(filter.Name) ? null : SqlLike.Escape(filter.Name.Trim()),
+                Category = string.IsNullOrWhiteSpace(filter.Category) ? null : filter.Category
+            },
+            commandType: CommandType.StoredProcedure)).ToList();
+
+        var hasMore = rows.Count > filter.Limit;
+        var data = hasMore ? rows.Take(filter.Limit).ToList() : rows;
+        var nextCursor = hasMore && data.Count > 0 ? ProductCursor.Encode(data.Last().Id) : null;
+
+        return new CursorResponse<AdminProductResponse>(data, nextCursor, hasMore);
     }
 
     public async Task<bool> NameExists(string name, long? excludeId = null)
@@ -60,27 +85,17 @@ public class ProductRepository(DapperContext context) : IProductRepository
             commandType: CommandType.StoredProcedure);
     }
 
-    // OUTPUT ... INTO: a table with an enabled trigger (the audit trigger) cannot return OUTPUT rows directly.
     public Task<ReservedProduct?> ReserveStock(long productId, int quantity, IDbTransaction transaction) =>
         transaction.Connection!.QueryFirstOrDefaultAsync<ReservedProduct>(
-            @"DECLARE @reserved TABLE (Id BIGINT, Name NVARCHAR(150), Price DECIMAL(18,2), Cost DECIMAL(18,2));
-
-              UPDATE Products
-              SET AvailableQuantity = AvailableQuantity - @Quantity
-              OUTPUT inserted.Id, inserted.Name, inserted.Price, inserted.Cost INTO @reserved
-              WHERE Id = @ProductId AND AvailableQuantity >= @Quantity;
-
-              SELECT Id, Name, Price, Cost FROM @reserved;",
+            "ProductsReserveStock",
             new { ProductId = productId, Quantity = quantity },
-            transaction);
+            transaction,
+            commandType: CommandType.StoredProcedure);
 
     public async Task<bool> Exists(long productId, IDbTransaction transaction) =>
         await transaction.Connection!.ExecuteScalarAsync<bool>(
-            "SELECT CASE WHEN EXISTS (SELECT 1 FROM Products WHERE Id = @ProductId) THEN 1 ELSE 0 END",
+            "ProductsCheckExists",
             new { ProductId = productId },
-            transaction);
-
-    /// <summary>Escapes LIKE wildcards so that a name filter is always a plain "contains" search (the procedure uses ESCAPE '\').</summary>
-    private static string EscapeLike(string value) =>
-        value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[");
+            transaction,
+            commandType: CommandType.StoredProcedure);
 }

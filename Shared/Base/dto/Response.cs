@@ -1,4 +1,4 @@
-﻿namespace AlQaseh_Ecommerce_API.Shared.Base.dto;
+namespace AlQaseh_Ecommerce_API.Shared.Base.dto;
 
 /// <summary>
 /// Standardized paginated response envelope providing metadata for consumer clients.
@@ -17,7 +17,7 @@ public class Response<T>
         CurrentPage = currentPage;
         TotalCount = totalCount;
 
-        if (pageSize <= 0)
+        if (pageSize <= 0 || totalCount == 0)
         {
             PagesCount = 0;
             IsLast = true;
@@ -25,6 +25,6 @@ public class Response<T>
         }
 
         PagesCount = (totalCount + pageSize - 1) / pageSize;
-        IsLast = currentPage >= PagesCount;
+        IsLast = currentPage >= PagesCount - 1;
     }
 }

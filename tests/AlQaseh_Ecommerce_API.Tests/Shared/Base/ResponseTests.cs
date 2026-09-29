@@ -1,4 +1,4 @@
-﻿using AlQaseh_Ecommerce_API.Shared.Base.dto;
+using AlQaseh_Ecommerce_API.Shared.Base.dto;
 using FluentAssertions;
 using Xunit;
 
@@ -7,11 +7,11 @@ namespace AlQaseh_Ecommerce_API.Tests.Shared.Base;
 public class ResponseTests
 {
     [Theory]
-    [InlineData(100, 10, 1, 10, false)]
-    [InlineData(100, 10, 10, 10, true)]
-    [InlineData(25, 10, 1, 3, false)]
-    [InlineData(25, 10, 3, 3, true)]
-    [InlineData(0, 10, 1, 0, true)]
+    [InlineData(100, 10, 0, 10, false)]
+    [InlineData(100, 10, 9, 10, true)]
+    [InlineData(25, 10, 0, 3, false)]
+    [InlineData(25, 10, 2, 3, true)]
+    [InlineData(0, 10, 0, 0, true)]
     public void Response_PaginationCalculations_AreAccurate(
         int totalCount, int pageSize, int currentPage, int expectedPagesCount, bool expectedIsLast)
     {

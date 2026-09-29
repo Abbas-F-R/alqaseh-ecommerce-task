@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace AlQaseh_Ecommerce_API.Features.Products.Controllers;
 
 /// <summary>
-/// Product catalog: admins create and update products, admins and customers list them.
+/// Product catalog: admins create and update products; admins and customers each have their own list endpoint.
 /// </summary>
 [Route("api/products")]
 [ApiController]
@@ -58,25 +58,37 @@ public class ProductController(IProductService service) : BaseController
         Respond(await service.Update(id, CreateServiceRequest(form)));
 
     /// <summary>
-    /// Lists products, filtered by name (contains) and category, one page at a time (admins and customers).
+    /// Lists products for admins with page/offset pagination (page number from 0), filtered by name (contains) and category.
+    /// Each product shows its <c>cost</c>, the exact <c>availableQuantity</c> and who created / last updated it.
     /// </summary>
-    /// <remarks>
-    /// Admins receive <c>cost</c> and the exact <c>availableQuantity</c> (<see cref="AdminProductResponse"/>).
-    /// Customers receive <c>stockStatus</c> instead (<see cref="CustomerProductResponse"/>): low (0-4), limited (5-9), available (10+).
-    /// </remarks>
-    /// <response code="200">A page of products (empty when nothing matches).</response>
+    /// <response code="200">A page of products with totals (empty when nothing matches).</response>
     /// <response code="400">Invalid category, page number or page size (1-50).</response>
     /// <response code="401">Missing or invalid token.</response>
-    [HttpGet]
-    [Authorize(Roles = Roles.AdminOrCustomer)]
+    /// <response code="403">The caller is not an admin.</response>
+    [HttpGet("~/api/admin/products")]
+    [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(typeof(Response<AdminProductResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> ListProducts([FromQuery] ProductFilter filter)
-    {
-        if (Role == Roles.Admin)
-            return RespondPaged(await service.GetAll(CreateServiceRequest(filter)), filter);
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<Response<AdminProductResponse>>> ListProductsForAdmin([FromQuery] AdminProductFilter filter) =>
+        RespondPaged(await service.GetAll(CreateServiceRequest(filter)), filter);
 
-        return RespondPaged(await service.GetAllForCustomer(CreateServiceRequest(filter)), filter);
-    }
+    /// <summary>
+    /// Lists products for customers, one cursor page at a time, filtered by name (contains) and category.
+    /// Customers never see the exact quantity or the cost: each product shows a <c>stockStatus</c>
+    /// (low 0-4, limited 5-9, available 10+).
+    /// </summary>
+    /// <response code="200">A cursor page of products (empty when nothing matches).</response>
+    /// <response code="400">Invalid category, limit (1-50) or cursor.</response>
+    /// <response code="401">Missing or invalid token.</response>
+    /// <response code="403">The caller is not a customer.</response>
+    [HttpGet("~/api/customer/products")]
+    [Authorize(Roles = Roles.Customer)]
+    [ProducesResponseType(typeof(CursorResponse<CustomerProductResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<CursorResponse<CustomerProductResponse>>> ListProductsForCustomer([FromQuery] CustomerProductFilter filter) =>
+        Respond(await service.GetAllForCustomer(CreateServiceRequest(filter)));
 }

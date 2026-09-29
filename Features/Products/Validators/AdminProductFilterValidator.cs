@@ -4,9 +4,9 @@ using FluentValidation;
 
 namespace AlQaseh_Ecommerce_API.Features.Products.Validators;
 
-public class ProductFilterValidator : PagedFilterValidator<ProductFilter>
+public class AdminProductFilterValidator : PagedFilterValidator<AdminProductFilter>
 {
-    public ProductFilterValidator()
+    public AdminProductFilterValidator()
     {
         RuleFor(x => x.Name)
             .MaximumLength(150).WithMessage("Name filter must not exceed 150 characters.");

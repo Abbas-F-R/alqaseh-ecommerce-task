@@ -13,17 +13,17 @@ namespace AlQaseh_Ecommerce_API.Features.Products.Services;
 [Scoped]
 public class ProductService(IProductRepository productRepository) : IProductService
 {
-    public async Task<ServiceResult<List<AdminProductResponse>>> GetAll(ServiceRequest<ProductFilter> request)
+    public async Task<ServiceResult<List<AdminProductResponse>>> GetAll(ServiceRequest<AdminProductFilter> request)
     {
-        var (data, totalCount) = await productRepository.GetAll(Normalize(request.Dto));
+        var (data, totalCount) = await productRepository.GetPage(Normalize(request.Dto));
         return ServiceResult<List<AdminProductResponse>>.PagedOk(data, totalCount);
     }
 
-    public async Task<ServiceResult<List<CustomerProductResponse>>> GetAllForCustomer(ServiceRequest<ProductFilter> request)
+    public async Task<ServiceResult<CursorResponse<CustomerProductResponse>>> GetAllForCustomer(ServiceRequest<CustomerProductFilter> request)
     {
-        var (data, totalCount) = await productRepository.GetAll(Normalize(request.Dto));
+        var cursorResult = await productRepository.GetCursorPage(Normalize(request.Dto));
 
-        var customerView = data.Select(p => new CustomerProductResponse
+        var customerData = cursorResult.Data.Select(p => new CustomerProductResponse
         {
             Id = p.Id,
             Name = p.Name,
@@ -32,7 +32,8 @@ public class ProductService(IProductRepository productRepository) : IProductServ
             StockStatus = StockStatuses.FromQuantity(p.AvailableQuantity)
         }).ToList();
 
-        return ServiceResult<List<CustomerProductResponse>>.PagedOk(customerView, totalCount);
+        var response = new CursorResponse<CustomerProductResponse>(customerData, cursorResult.NextCursor, cursorResult.HasMore);
+        return ServiceResult<CursorResponse<CustomerProductResponse>>.Ok(response);
     }
 
     public async Task<ServiceResult<AdminProductResponse>> Add(ServiceRequest<ProductForm> request)
@@ -86,10 +87,18 @@ public class ProductService(IProductRepository productRepository) : IProductServ
         AvailableQuantity = form.AvailableQuantity
     };
 
-    private static ProductFilter Normalize(ProductFilter filter) => new()
+    private static AdminProductFilter Normalize(AdminProductFilter filter) => new()
     {
         PageNumber = filter.PageNumber,
         PageSize = filter.PageSize,
+        Name = string.IsNullOrWhiteSpace(filter.Name) ? null : filter.Name.Trim(),
+        Category = ProductCategories.Normalize(filter.Category)
+    };
+
+    private static CustomerProductFilter Normalize(CustomerProductFilter filter) => new()
+    {
+        Limit = filter.Limit,
+        Cursor = string.IsNullOrWhiteSpace(filter.Cursor) ? null : filter.Cursor.Trim(),
         Name = string.IsNullOrWhiteSpace(filter.Name) ? null : filter.Name.Trim(),
         Category = ProductCategories.Normalize(filter.Category)
     };

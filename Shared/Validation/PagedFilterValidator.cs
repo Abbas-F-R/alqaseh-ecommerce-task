@@ -4,14 +4,14 @@ using FluentValidation;
 namespace AlQaseh_Ecommerce_API.Shared.Validation;
 
 /// <summary>
-/// Pagination rules shared by every list endpoint: page number at least 1, page size between 1 and 50.
+/// Pagination rules shared by the offset-paged list endpoints: page number from 0, page size between 1 and 50.
 /// </summary>
 public class PagedFilterValidator<T> : AbstractValidator<T> where T : BaseFilter
 {
     public PagedFilterValidator()
     {
         RuleFor(x => x.PageNumber)
-            .GreaterThanOrEqualTo(1).WithMessage("Page number must be at least 1.");
+            .GreaterThanOrEqualTo(0).WithMessage("Page number must be at least 0.");
 
         RuleFor(x => x.PageSize)
             .InclusiveBetween(1, BaseFilter.MaxPageSize).WithMessage($"Page size must be between 1 and {BaseFilter.MaxPageSize}.");

@@ -1,5 +1,6 @@
 using System.Data;
 using AlQaseh_Ecommerce_API.Features.Products.Dtos;
+using AlQaseh_Ecommerce_API.Shared.Base.dto;
 
 namespace AlQaseh_Ecommerce_API.Features.Products.Repositories;
 
@@ -10,8 +11,11 @@ public interface IProductRepository
 {
     Task<AdminProductResponse?> Get(long id);
 
-    /// <summary>One page of products (filtered by name and category, ordered by id) and the total number of matches.</summary>
-    Task<(List<AdminProductResponse> Data, int TotalCount)> GetAll(ProductFilter filter);
+    /// <summary>Admin list: one page (offset pagination, ordered by id) and the total number of matches.</summary>
+    Task<(List<AdminProductResponse> Data, int TotalCount)> GetPage(AdminProductFilter filter);
+
+    /// <summary>Customer list: one keyset page (ordered by id; no OFFSET, no count).</summary>
+    Task<CursorResponse<AdminProductResponse>> GetCursorPage(CustomerProductFilter filter);
 
     /// <summary>Whether another product already has this name (case-insensitive), optionally ignoring one product.</summary>
     Task<bool> NameExists(string name, long? excludeId = null);

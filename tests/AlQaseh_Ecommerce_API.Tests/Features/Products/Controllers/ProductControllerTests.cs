@@ -1,6 +1,7 @@
 using AlQaseh_Ecommerce_API.Features.Products.Controllers;
 using AlQaseh_Ecommerce_API.Features.Products.Dtos;
 using AlQaseh_Ecommerce_API.Features.Products.Services;
+using AlQaseh_Ecommerce_API.Features.Products.Utils;
 using AlQaseh_Ecommerce_API.Shared.Base.dto;
 using AlQaseh_Ecommerce_API.Shared.Constants;
 using AlQaseh_Ecommerce_API.Tests.TestSupport;
@@ -34,8 +35,11 @@ public class ProductControllerTests
     }
 
     [Fact]
-    public void List_IsOpenToAdminsAndCustomers() =>
-        RolesOf(nameof(ProductController.ListProducts)).Should().Be("Admin,Customer");
+    public void EachRoleHasItsOwnListEndpoint()
+    {
+        RolesOf(nameof(ProductController.ListProductsForAdmin)).Should().Be("Admin");
+        RolesOf(nameof(ProductController.ListProductsForCustomer)).Should().Be("Customer");
+    }
 
     [Fact]
     public void ThereIsNoDeleteEndpoint() =>
@@ -92,27 +96,31 @@ public class ProductControllerTests
     }
 
     [Fact]
-    public async Task List_AsAdmin_ReturnsTheAdminViewInThePaginationEnvelope()
+    public async Task List_AsAdmin_ReturnsTheAdminViewInThePageEnvelope()
     {
-        _service.Setup(s => s.GetAll(It.IsAny<ServiceRequest<ProductFilter>>()))
+        _service.Setup(s => s.GetAll(It.IsAny<ServiceRequest<AdminProductFilter>>()))
             .ReturnsAsync(ServiceResult<List<AdminProductResponse>>.PagedOk([new AdminProductResponse { Id = 1, AvailableQuantity = 3 }], 21));
 
-        var result = await Controller("Admin").ListProducts(new ProductFilter { PageNumber = 2, PageSize = 10 });
+        var result = await Controller("Admin").ListProductsForAdmin(new AdminProductFilter { PageNumber = 1, PageSize = 10 });
 
-        var page = result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<Response<AdminProductResponse>>().Subject;
-        (page.CurrentPage, page.TotalCount, page.PagesCount, page.IsLast).Should().Be((2, 21, 3, false));
-        _service.Verify(s => s.GetAllForCustomer(It.IsAny<ServiceRequest<ProductFilter>>()), Times.Never);
+        var page = result.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<Response<AdminProductResponse>>().Subject;
+        (page.CurrentPage, page.TotalCount, page.PagesCount, page.IsLast).Should().Be((1, 21, 3, false));
+        _service.Verify(s => s.GetAllForCustomer(It.IsAny<ServiceRequest<CustomerProductFilter>>()), Times.Never);
     }
 
     [Fact]
     public async Task List_AsCustomer_ReturnsTheCustomerView()
     {
-        _service.Setup(s => s.GetAllForCustomer(It.IsAny<ServiceRequest<ProductFilter>>()))
-            .ReturnsAsync(ServiceResult<List<CustomerProductResponse>>.PagedOk([new CustomerProductResponse { Id = 1, StockStatus = "low" }], 1));
+        _service.Setup(s => s.GetAllForCustomer(It.IsAny<ServiceRequest<CustomerProductFilter>>()))
+            .ReturnsAsync(ServiceResult<CursorResponse<CustomerProductResponse>>.Ok(
+                new CursorResponse<CustomerProductResponse>([new CustomerProductResponse { Id = 1, StockStatus = "low" }], null, false)));
 
-        var result = await Controller("Customer").ListProducts(new ProductFilter());
+        var result = await Controller("Customer").ListProductsForCustomer(new CustomerProductFilter());
 
-        result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<Response<CustomerProductResponse>>();
-        _service.Verify(s => s.GetAll(It.IsAny<ServiceRequest<ProductFilter>>()), Times.Never);
+        var page = result.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<CursorResponse<CustomerProductResponse>>().Subject;
+        page.Data.Should().HaveCount(1);
+        page.NextCursor.Should().BeNull();
+        page.HasMore.Should().BeFalse();
+        _service.Verify(s => s.GetAll(It.IsAny<ServiceRequest<AdminProductFilter>>()), Times.Never);
     }
 }

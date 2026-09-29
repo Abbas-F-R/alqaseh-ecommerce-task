@@ -101,33 +101,38 @@ public class ProductServiceTests
     // ---- list
 
     [Fact]
-    public async Task GetAll_ForAdmin_KeepsCostAndExactQuantity_AndNormalizesTheFilter()
+    public async Task GetAll_ForAdmin_KeepsCostAndExactQuantity_ReturnsTheTotal_AndNormalizesTheFilter()
     {
-        ProductFilter? used = null;
-        _repo.Setup(r => r.GetAll(It.IsAny<ProductFilter>())).Callback<ProductFilter>(f => used = f)
-            .ReturnsAsync((new List<AdminProductResponse> { Product(1, "Chair", 3), Product(2, "Desk", 12) }, 2));
+        AdminProductFilter? used = null;
+        _repo.Setup(r => r.GetPage(It.IsAny<AdminProductFilter>())).Callback<AdminProductFilter>(f => used = f)
+            .ReturnsAsync((new List<AdminProductResponse> { Product(1, "Chair", 3), Product(2, "Desk", 12) }, 42));
 
-        var result = await _service.GetAll(new ServiceRequest<ProductFilter>(
-            new ProductFilter { Name = "  ch ", Category = "FURNITURE", PageNumber = 2, PageSize = 5 }, 1));
+        var result = await _service.GetAll(new ServiceRequest<AdminProductFilter>(
+            new AdminProductFilter { Name = "  ch ", Category = "FURNITURE", PageNumber = 2, PageSize = 5 }, 1));
 
-        result.TotalCount.Should().Be(2);
         result.Data!.Select(p => p.AvailableQuantity).Should().Equal(3, 12);
         result.Data!.All(p => p.Cost == 60).Should().BeTrue();
-        used.Should().BeEquivalentTo(new ProductFilter { Name = "ch", Category = "furniture", PageNumber = 2, PageSize = 5 });
+        result.TotalCount.Should().Be(42);
+        used.Should().BeEquivalentTo(new AdminProductFilter { Name = "ch", Category = "furniture", PageNumber = 2, PageSize = 5 });
     }
 
     [Fact]
-    public async Task GetAllForCustomer_ShowsStockStatusInsteadOfQuantity()
+    public async Task GetAllForCustomer_ShowsStockStatusInsteadOfQuantity_AndNormalizesTheFilter()
     {
-        _repo.Setup(r => r.GetAll(It.IsAny<ProductFilter>())).ReturnsAsync((new List<AdminProductResponse>
-        {
-            Product(1, "A", 0), Product(2, "B", 4), Product(3, "C", 5), Product(4, "D", 9), Product(5, "E", 10), Product(6, "F", 500)
-        }, 6));
+        CustomerProductFilter? used = null;
+        _repo.Setup(r => r.GetCursorPage(It.IsAny<CustomerProductFilter>())).Callback<CustomerProductFilter>(f => used = f)
+            .ReturnsAsync(new CursorResponse<AdminProductResponse>(new List<AdminProductResponse>
+            {
+                Product(1, "A", 0), Product(2, "B", 4), Product(3, "C", 5), Product(4, "D", 9), Product(5, "E", 10), Product(6, "F", 500)
+            }, "next", true));
 
-        var result = await _service.GetAllForCustomer(new ServiceRequest<ProductFilter>(new ProductFilter(), 1));
+        var result = await _service.GetAllForCustomer(new ServiceRequest<CustomerProductFilter>(
+            new CustomerProductFilter { Name = " a ", Category = "GARDEN", Limit = 6, Cursor = " c0 " }, 1));
 
-        result.Data!.Select(p => p.StockStatus).Should().Equal("low", "low", "limited", "limited", "available", "available");
-        result.TotalCount.Should().Be(6);
+        result.Data!.Data.Select(p => p.StockStatus).Should().Equal("low", "low", "limited", "limited", "available", "available");
+        result.Data!.NextCursor.Should().Be("next");
+        result.Data!.HasMore.Should().BeTrue();
+        used.Should().BeEquivalentTo(new CustomerProductFilter { Name = "a", Category = "garden", Limit = 6, Cursor = "c0" });
     }
 
     [Fact]
