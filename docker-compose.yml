@@ -20,7 +20,7 @@ services:
   # The API itself (dev profile: demo data, random JWT key). Skip it with:  docker compose up -d postgres
   api:
     build: .
-    container_name: alqaseh-api
+    container_name: alqaseh-java-api
     depends_on:
       postgres:
         condition: service_healthy
