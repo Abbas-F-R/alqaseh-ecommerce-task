@@ -178,16 +178,6 @@ public final class ApiExamples {
               }
             }""".formatted(TS);
 
-    /** A query parameter that cannot be converted (unknown enum constant, malformed UUID, text instead of a number). */
-    public static String validationInvalidValue(String path, String field) {
-        return """
-                {
-                  "timestamp": "%s", "status": 400, "code": "VALIDATION_ERROR", "message": "Validation failed for one or more fields",
-                  "path": "%s",
-                  "validationErrors": {"%s": "Invalid value"}
-                }""".formatted(TS, path, field);
-    }
-
     public static String badRequest(String path) {
         return error(400, "BAD_REQUEST", "Invalid request parameters", path);
     }
