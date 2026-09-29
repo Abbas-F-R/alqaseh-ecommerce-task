@@ -33,7 +33,7 @@ public class DatabaseMigratorTests
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
 
-        scripts.Should().Equal("V001__Schema.sql", "V002__Procedures.sql", "V003__AuditTriggers.sql", "V004__ProductsKeysetPagination.sql", "V005__IntegrityConstraints.sql", "V006__ProductsGetAllPagesFromZero.sql");
+        scripts.Should().Equal("V001__Schema.sql", "V002__Procedures.sql", "V003__AuditTriggers.sql", "V004__ProductsKeysetPagination.sql", "V005__IntegrityConstraints.sql", "V006__ProductsGetAllPagesFromZero.sql", "V007__OptionalFilterPlans.sql");
     }
 
     [Fact]
